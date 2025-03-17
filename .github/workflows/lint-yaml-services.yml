@@ -1,0 +1,122 @@
+name: Lint YAML services
+
+on:
+  pull_request:
+    paths:
+      - "services/*/*"
+    branches:
+      - "main"
+
+env:
+  YQ_VERSION: 4.45.1
+  YAMLLINT_VERSION: 1.32.0
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  files_changed:
+    runs-on: small-runner
+    steps:
+      - name: Get file changes
+        id: file_changes
+        uses: trilom/file-changes-action@1.2.4
+
+      - name: Get files
+        id: files
+        run: |
+          content=$(jq ".[]" $HOME/files.json | grep 'services/' | jq -R -s -c 'split("\n")[:-1]')
+          echo "::set-output name=files::$content"
+    outputs:
+      files: ${{ steps.files.outputs.files }}
+
+  validate_files:
+    runs-on: small-runner
+    needs: [files_changed]
+    if: needs.files_changed.outputs.files != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        file: ${{ fromJson(needs.files_changed.outputs.files) }}
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Get yq executable from cache
+        id: cache-yq
+        uses: actions/cache@v4
+        with:
+          key: yq-${{ env.YQ_VERSION }}
+          path: ${{ github.workspace }}/yq
+          restore-keys: yq
+
+      - name: Download yq
+        if: steps.cache-yq.outputs.cache-hit != 'true'
+        run: |
+          wget https://github.com/mikefarah/yq/releases/download/v$YQ_VERSION/yq_linux_amd64.tar.gz -O - |\
+          tar xz && mv yq_linux_amd64 ${{ github.workspace }}/yq
+
+      - name: Save yq executable to cache
+        if: steps.cache-yq.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          key: yq-${{ env.YQ_VERSION }}
+          path: ${{ github.workspace }}/yq
+
+      - name: Get yamllint from cache
+        id: cache-yamllint
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ env.YAMLLINT_VERSION }}
+          restore-keys: |
+            pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
+
+      - name: Install yamllint
+        if: steps.cache-yamllint.outputs.cache-hit != 'true'
+        run: pip install yamllint==${{ env.YAMLLINT_VERSION }}
+
+      - name: Validate YAML syntax
+        env:
+          PATH: ${{ github.workspace }}/yq:$PATH
+        run: |
+          file=${{ matrix.file }}
+          echo "Validating $file with yamllint..."
+          expected_keys="name enabled host port protocol routes tags"
+          yamllint -d "{extends: default, rules: {indentation: {spaces: 2}, key-ordering: {enabled: true, order: ['name', 'enabled', 'host', 'port', 'protocol', 'routes', 'tags']}}}" "$file" || {
+            echo "Error: File $file does not follow the expected key order."
+            echo "Expected: $expected_keys"
+            exit 1
+          }
+
+          expected_route_keys="name host protocols methods paths strip_path plugins"
+          yq -e '.services[].routes[] | keys | join(" ")' "$file" | while read -r route_keys; do
+            if [[ "$route_keys" != "$expected_route_keys" && "$route_keys" != "name host protocols paths strip_path plugins" ]]; then
+              echo "Error: Key order in routes[] of $file does not follow the expected key order."
+              echo "Expected: $expected_route_keys"
+              echo "Found:    $route_keys"
+              exit 1
+            fi
+          done
+
+          expected_plugin_keys="name enabled protocols config"
+          yq -e '.services[].routes[].plugins[] | keys | join(" ")' "$file" | while read -r plugin_keys; do
+            if [[ "$plugin_keys" != "$expected_plugin_keys" ]]; then
+              echo "Error: Key order in plugins[] of $file does not follow the expected key order."
+              echo "Expected: $expected_plugin_keys"
+              echo "Found:    $plugin_keys"
+              exit 1
+            fi
+          done
+
+          routes_protocols=$(yq eval '.services[].routes[].protocols[]' "$file" | sort -u)
+          if [[ "$routes_protocols" != "http" ]]; then
+            echo "Error: Invalid routes protocol in $file: Expected 'http' but got '$routes_protocols'"
+            exit 1
+          fi
+
+          plugins_protocols=$(yq eval '.services[].routes[].plugins[].protocols[]' "$file" | sort -u)
+          if [[ "$plugins_protocols" != "http" ]]; then
+            echo "Error: Invalid plugins protocol in $file: Expected 'http' but got '$plugins_protocols'"
+            exit 1
+          fi
