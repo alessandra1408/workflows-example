@@ -30,9 +30,9 @@ services:
             required-claims: null
           policy-key: null
     routes:
-      - name: test-route
-        hosts:
+      - hosts:
           - test.com
+        name: test-route
         headers:
           - test.com
         protocols:
