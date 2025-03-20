@@ -100,7 +100,7 @@ jobs:
             exit 1
           fi
 
-          expected_primary_keys=("name" "enabled" "hosts" "port" "protocols" "routes" "tags")
+          expected_primary_keys=("name" "enabled" "host" "port" "protocol" "routes" "tags")
           found_keys_list=$($YQ_PATH -e '.services[] | keys | join(",")' "$file")
 
           for found_keys in $found_keys_list; do
