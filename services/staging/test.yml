@@ -12,8 +12,8 @@ services:
     tls_verify: false
     protocol: https
     plugins:
-      - name: jwt-auth
-        enabled: true
+      - enabled: true
+        name: jwt-auth
         protocols:
           - http
         config:
