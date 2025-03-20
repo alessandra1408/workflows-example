@@ -125,7 +125,7 @@ jobs:
             echo "Found keys: $route_keys"
             
             last_index=-1
-            for key in "${expected_primary_keys[@]}"; do
+            for key in "${#expected_primary_keys[@]}"; do
               for i in "${!found_keys[@]}"; do
                 if [[ "${found_keys[i]}" == "$key" ]]; then
                   if [[ $i -lt $last_index ]]; then
