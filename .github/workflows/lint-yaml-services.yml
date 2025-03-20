@@ -123,12 +123,12 @@ jobs:
             IFS=',' read -ra keys_array <<< "$route_keys"
             
             last_index=-1
-            for key in "${expected_route_keys[@]}"; do
+            for key in "${expected_primary_keys[@]}"; do
               for i in "${!keys_array[@]}"; do
                 if [[ "${keys_array[i]}" == "$key" ]]; then
                   if [[ $i -lt $last_index ]]; then
-                    echo "Error: Key order in routes[] of $FILE does not follow the expected sequence."
-                    echo "Expected order: ${expected_route_keys[*]}"
+                    echo "Error: Key order in .services[] of $FILE does not follow the expected sequence."
+                    echo "Expected order: ${expected_primary_keys[*]}"
                     echo "Found order:    ${keys_array[*]}"
                     exit 1
                   fi
@@ -139,8 +139,8 @@ jobs:
             done
           done < <($YQ_PATH -e '.services[] | keys | join(",")' "$file")
 
-          if [[ "$found_keys" =~ (tls_verify|ca_certificates) ]]; then
-            if [[ ! "$found_keys" =~ port.*(tls_verify|ca_certificates) ]]; then
+          if [[ "$found_keys" =~ (tls_verify | ca_certificates) ]]; then
+            if [[ ! "$found_keys" =~ port.*(tls_verify | ca_certificates) ]]; then
               echo "Error: File $file does not follow the expected optional key order."
               echo "Optional keys (tls_verify, ca_certificates) must come after 'port'."
               echo "Found:    $found_keys"
