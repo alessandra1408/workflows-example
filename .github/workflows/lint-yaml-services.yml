@@ -14,7 +14,7 @@ env:
 
 jobs:
   files_changed:
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     steps:
       - name: Get file changes
         id: file_changes
