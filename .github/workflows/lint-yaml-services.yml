@@ -106,6 +106,7 @@ jobs:
             for key in "${expected_primary_keys[@]}"; do
               if [[ ! " ${found_keys[@]} " =~ " ${key} " ]]; then
                 echo "Error: Missing mandatory key '$key' in 'services[]' of $file."
+                echo "Found:    $found_keys"
                 exit 1
               fi
             done
