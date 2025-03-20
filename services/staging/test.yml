@@ -51,7 +51,7 @@ services:
               bypass-if-headers:
                 - provider-key
                 - provider-id
-              iss-urls: https://
+              iss-urls: https://a
               jwk-urls: https://
               jwt-config:
                 permitted-algs: null
