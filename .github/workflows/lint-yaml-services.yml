@@ -253,8 +253,8 @@ jobs:
             done
           done < <($YQ_PATH -e '.services[].routes[] | keys | join(",")' "$file")
 
-          if [[ "$found_keys" =~ hosts ]]; then
-            if [[ ! "$found_keys" =~ name.*hosts ]]; then
+          if [[ "$found_keys" =~ (hosts) ]]; then
+            if [[ ! "$found_keys" =~ name.*(hosts) ]]; then
               echo "Error: File $file does not follow the expected key order."
               echo "Key 'hosts' must come after 'name'."
               echo "Found:    $found_keys"
