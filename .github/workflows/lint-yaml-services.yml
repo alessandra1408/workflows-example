@@ -120,7 +120,7 @@ jobs:
           done
 
           while IFS= read -r route_keys; do
-            IFS=',' read -ra keys_array <<< "$route_keys"
+            IFS=' ' read -ra keys_array <<< "$route_keys"
 
             echo "Found keys: $route_keys"
             
@@ -139,7 +139,7 @@ jobs:
                 fi
               done
             done
-          done < <($YQ_PATH -e '.services[] | keys | join(",")' "$file")
+          done < <($YQ_PATH -e '.services[] | keys | join(" ")' "$file")
 
           if [[ "$found_keys" =~ (tls_verify|ca_certificates) ]]; then
             if [[ ! "$found_keys" =~ port.*(tls_verify|ca_certificates) ]]; then
