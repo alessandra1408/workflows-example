@@ -124,12 +124,12 @@ jobs:
             
             last_index=-1
             for key in "${expected_route_keys[@]}"; do
-              for i in "${!found_keys[@]}"; do
-                if [[ "${found_keys[i]}" == "$key" ]]; then
+              for i in "${!keys_array[@]}"; do
+                if [[ "${keys_array[i]}" == "$key" ]]; then
                   if [[ $i -lt $last_index ]]; then
                     echo "Error: Key order in routes[] of $FILE does not follow the expected sequence."
                     echo "Expected order: ${expected_route_keys[*]}"
-                    echo "Found order:    ${found_keys[*]}"
+                    echo "Found order:    ${keys_array[*]}"
                     exit 1
                   fi
                   last_index=$i
@@ -188,12 +188,12 @@ jobs:
             
             last_index=-1
             for key in "${expected_plugin_keys[@]}"; do
-              for i in "${!found_keys[@]}"; do
-                if [[ "${found_keys[i]}" == "$key" ]]; then
+              for i in "${!keys_array[@]}"; do
+                if [[ "${keys_array[i]}" == "$key" ]]; then
                   if [[ $i -lt $last_index ]]; then
                     echo "Error: Key order in .services[].plugins[] of $FILE does not follow the expected sequence."
                     echo "Expected order: ${expected_plugin_keys[*]}"
-                    echo "Found order:    ${found_keys[*]}"
+                    echo "Found order:    ${keys_array[*]}"
                     exit 1
                   fi
                   last_index=$i
@@ -242,12 +242,12 @@ jobs:
             
             last_index=-1
             for key in "${expected_route_keys[@]}"; do
-              for i in "${!found_keys[@]}"; do
-                if [[ "${found_keys[i]}" == "$key" ]]; then
+              for i in "${!keys_array[@]}"; do
+                if [[ "${keys_array[i]}" == "$key" ]]; then
                   if [[ $i -lt $last_index ]]; then
                     echo "Error: Key order in .services[].routes[] of $file does not follow the expected sequence."
                     echo "Expected order: ${expected_route_keys[*]}"
-                    echo "Found order:    ${found_keys[*]}"
+                    echo "Found order:    ${keys_array[*]}"
                     exit 1
                   fi
                   last_index=$i
@@ -281,12 +281,12 @@ jobs:
             
             last_index=-1
             for key in "${expected_plugin_route_keys[@]}"; do
-              for i in "${!found_keys[@]}"; do
-                if [[ "${found_keys[i]}" == "$key" ]]; then
+              for i in "${!keys_array[@]}"; do
+                if [[ "${keys_array[i]}" == "$key" ]]; then
                   if [[ $i -lt $last_index ]]; then
                     echo "Error: order of mandatory keys in .services[].routes[].plugins[] of $file does not follow the expected sequence."
                     echo "Expected order: ${expected_plugin_route_keys[*]}"
-                    echo "Found order:    ${found_keys[*]}"
+                    echo "Found order:    ${keys_array[*]}"
                     exit 1
                   fi
                   last_index=$i
