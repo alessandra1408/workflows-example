@@ -9,8 +9,8 @@ services:
     enabled: true
     host: test
     port: 443
-    tls_verify: false
     protocol: https
+    tls_verify: false
     plugins:
       - name: jwt-auth
         enabled: true
