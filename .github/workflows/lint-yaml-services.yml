@@ -198,7 +198,7 @@ jobs:
               done
             done
             
-          done < <(yq -e '.services[].routes[] | keys | join(" ")' "$file")
+          done < <(YQ_PATH -e '.services[].routes[] | keys | join(" ")' "$file")
 
           # expected_route_keys=("name" "hosts" "protocols" "methods" "paths")
           # $YQ_PATH -e '.services[].routes[] | keys | join(" ")' "$file" | while read -r route_keys; do
