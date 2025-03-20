@@ -24,7 +24,7 @@ services:
       - name: jwt-auth
         enabled: true
         protocols:
-          - https
+          - http
         config:
           header-keys:
             - Authorization
@@ -42,6 +42,8 @@ services:
       - name: test-route
         protocols:
           - http
+        hosts:
+          - test.com
         methods:
           - GET
         paths:
