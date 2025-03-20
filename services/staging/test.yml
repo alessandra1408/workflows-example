@@ -20,24 +20,6 @@ services:
     enabled: true
     protocol: https
     tls_verify: false
-    plugins:
-      - name: jwt-auth
-        enabled: true
-        protocols:
-          - http
-        config:
-          header-keys:
-            - Authorization
-          bypass-if-headers:
-            - provider-key
-            - provider-id
-          iss-urls: https://...
-          jwk-urls: https://...
-          jwt-config:
-            permitted-algs: null
-            permitted-token-types: null
-            required-claims: null
-          policy-key: null
     routes:
       - name: test-route
         protocols:
@@ -67,5 +49,23 @@ services:
                 permitted-token-types: null
                 required-claims: null
               policy-key: null
+    plugins:
+      - name: jwt-auth
+        enabled: true
+        protocols:
+          - http
+        config:
+          header-keys:
+            - Authorization
+          bypass-if-headers:
+            - provider-key
+            - provider-id
+          iss-urls: https://...
+          jwk-urls: https://...
+          jwt-config:
+            permitted-algs: null
+            permitted-token-types: null
+            required-claims: null
+          policy-key: null
     tags:
       - test
