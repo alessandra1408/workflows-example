@@ -11,20 +11,52 @@ services:
     port: 443
     tls_verify: false
     protocol: https
+    plugins:
+      - name: jwt-auth
+        enabled: true
+        protocols:
+          - http
+        config:
+          header-keys:
+            - Authorization
+          bypass-if-headers:
+            - provider-key
+            - provider-id
+          iss-urls: https://...
+          jwk-urls: https://...
+          jwt-config:
+            permitted-algs: null
+            permitted-token-types: null
+            required-claims: null
+          policy-key: null
     routes:
-      - hosts:
+      - name: test-route
+        hosts:
           - test.com
-        name: test-route
-        methods:
-          - POST
+        headers:
+          - test.com
+        protocols:
+          - http
         paths:
           - /auth/teste
-        protocols:
-          - https
         strip_path: false
-
+        plugins:
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              header-keys:
+                - Authorization
+              bypass-if-headers:
+                - provider-key
+                - provider-id
+              iss-urls: https://
+              jwk-urls: https://
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              policy-key: null
     tags:
       - test
-
-# deixando as keys principais corretas, mas errado dentro de routes para teste
-
