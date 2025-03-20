@@ -37,6 +37,8 @@ services:
           - test.com
         protocols:
           - http
+        methods:
+          - GET
         paths:
           - /auth/teste
         strip_path: false
