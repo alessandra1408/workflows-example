@@ -170,6 +170,7 @@ jobs:
               echo "key 'plugins' must come after 'protocol'."
               echo "Found:    $found_keys"
               exit 1
+            fi
           fi
 
           if [[ ! "$found_keys" =~ plugins.*routes ]]; then
@@ -245,7 +246,6 @@ jobs:
             echo "Error: Invalid plugins protocol inside 'services' in $file: Expected 'http' but got '$plugins_protocols'"
             exit 1
           fi
-          done
 
           expected_route_keys=("name" "hosts" "protocols" "methods" "paths")
           found_keys_list=$($YQ_PATH -e '.services[].routes[] | keys | join(",")' "$file")
@@ -284,7 +284,6 @@ jobs:
                 fi
               done
             done
-            
           done < <($YQ_PATH -e '.services[].routes[] | keys | join(",")' "$file")
 
           expected_plugin_route_keys=("name" "enabled" "protocols" "config")
@@ -324,7 +323,7 @@ jobs:
                 fi
               done
             done
-          done < <($YQ_PATH -e '.services[].routes[].plugins[] | keys | join(",")' "$file"
+          done < <($YQ_PATH -e '.services[].routes[].plugins[] | keys | join(",")' "$file")
 
           routes_protocols=$($YQ_PATH eval '.services[].routes[].protocols[]' "$file")
           invalid_routes_protocols=false
