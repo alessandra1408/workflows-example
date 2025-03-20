@@ -102,7 +102,6 @@ jobs:
 
           expected_primary_keys=("name" "enabled" "host" "port" "protocol" "routes" "tags")
           found_keys_list=$($YQ_PATH -e '.services[] | keys | join(",")' "$file")
-          echo "DEBUG: found_keys_list='$found_keys_list'"
 
           for found_keys in $found_keys_list; do
             IFS=',' read -ra keys_array <<< "$found_keys"
@@ -165,14 +164,22 @@ jobs:
           fi
 
           expected_plugin_keys=("name" "enabled" "protocols" "config")
-          for service in $($YQ_PATH -e '.services[].plugins[] | keys | join(" ")' "$file"); do
-            found_keys=($service)
+          found_keys_list=$($YQ_PATH -e '.services[] | keys | join(",")' "$file")
+
+          for found_keys in $found_keys_list; do
+            IFS=',' read -ra keys_array <<< "$found_keys"
+            
+            missing_keys=()
             for key in "${expected_plugin_keys[@]}"; do
-              if [[ ! " ${found_keys[@]} " =~ " ${key} " ]]; then
-                echo "Error: Missing mandatory key '$key' in 'plugins[]' of $file."
-                exit 1
-              fi
+              [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
             done
+
+            if [[ ${#missing_keys[@]} -ne 0 ]]; then
+              echo "Error: Missing mandatory keys in 'services[].plugins[]' of $file."
+              echo "Missing: ${missing_keys[*]}"
+              echo "Found:   ${keys_array[*]}"
+              exit 1
+            fi
           done
 
           while IFS= read -r route_keys; do
@@ -212,14 +219,22 @@ jobs:
           done
 
           expected_route_keys=("name" "hosts" "protocols" "methods" "paths")
-          for service in $($YQ_PATH -e '.services[].routes[] | keys | join(" ")' "$file"); do
-            found_keys=($service)
+          found_keys_list=$($YQ_PATH -e '.services[].routes[] | keys | join(",")' "$file")
+
+          for found_keys in $found_keys_list; do
+            IFS=',' read -ra keys_array <<< "$found_keys"
+            
+            missing_keys=()
             for key in "${expected_route_keys[@]}"; do
-              if [[ ! " ${found_keys[@]} " =~ " ${key} " ]]; then
-                echo "Error: Missing mandatory key '$key' in 'routes[]' of $file."
-                exit 1
-              fi
+              [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
             done
+
+            if [[ ${#missing_keys[@]} -ne 0 ]]; then
+              echo "Error: Missing mandatory keys in 'services[].routes[]' of $file."
+              echo "Missing: ${missing_keys[*]}"
+              echo "Found:   ${keys_array[*]}"
+              exit 1
+            fi
           done
 
           while IFS= read -r route_keys; do
@@ -244,14 +259,22 @@ jobs:
           done < <($YQ_PATH -e '.services[].routes[] | keys | join(" ")' "$file")
 
           expected_plugin_route_keys=("name" "enabled" "protocols" "config")
-          for service in $($YQ_PATH -e '.services[].routes[].plugins[] | keys | join(" ")' "$file"); do
-            found_keys=($service)
+          found_keys_list=$($YQ_PATH -e '.services[].routes[].plugins[] | keys | join(",")' "$file")
+
+          for found_keys in $found_keys_list; do
+            IFS=',' read -ra keys_array <<< "$found_keys"
+            
+            missing_keys=()
             for key in "${expected_plugin_route_keys[@]}"; do
-              if [[ ! " ${found_keys[@]} " =~ " ${key} " ]]; then
-                echo "Error: Missing mandatory key '$key' in 'services[]' of $file."
-                exit 1
-              fi
+              [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
             done
+
+            if [[ ${#missing_keys[@]} -ne 0 ]]; then
+              echo "Error: Missing mandatory keys in 'routes[].plugins[]' of $file."
+              echo "Missing: ${missing_keys[*]}"
+              echo "Found:   ${keys_array[*]}"
+              exit 1
+            fi
           done
 
           while IFS= read -r route_keys; do
