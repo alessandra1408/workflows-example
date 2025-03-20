@@ -123,6 +123,7 @@ jobs:
             IFS=' ' read -ra keys_array <<< "$route_keys"
 
             echo "Found keys: $route_keys"
+            echo "DEBUG: Found keys: ${keys_array[*]}"
             
             last_index=-1
             for key in "${expected_primary_keys[@]}"; do
