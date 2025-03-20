@@ -111,7 +111,7 @@ jobs:
               [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
             done
 
-            if [[ ${#missing_keys[@]} -ne 0 ]]; then
+            if [[ ${missing_keys[@]} -ne 0 ]]; then
               echo "Error: Missing mandatory keys in 'services[]' of $file."
               echo "Missing: ${missing_keys[*]}"
               echo "Found:   ${keys_array[*]}"
