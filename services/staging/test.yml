@@ -17,9 +17,7 @@ upstreams:
 
 services:
   - name: test
-    host: test.com
     enabled: true
-    port: 443
     protocol: https
     tls_verify: false
     plugins:
@@ -42,8 +40,6 @@ services:
           policy-key: null
     routes:
       - name: test-route
-        hosts:
-          - test.com
         protocols:
           - http
         methods:
