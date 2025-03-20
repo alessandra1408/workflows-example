@@ -102,6 +102,7 @@ jobs:
 
           expected_primary_keys=("name" "enabled" "host" "port" "protocol" "routes" "tags")
           found_keys_list=$($YQ_PATH -e '.services[] | keys | join(",")' "$file")
+          echo "DEBUG: found_keys_list='$found_keys_list'"
 
           for found_keys in $found_keys_list; do
             IFS=',' read -ra keys_array <<< "$found_keys"
