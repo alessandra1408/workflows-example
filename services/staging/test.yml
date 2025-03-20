@@ -10,6 +10,7 @@ services:
     host: test
     port: 443
     tls_verify: false
+    protocol: https
     plugins:
       - name: jwt-auth
         enabled: true
@@ -28,7 +29,6 @@ services:
             permitted-token-types: null
             required-claims: null
           policy-key: null
-    protocol: https
     routes:
       - name: test-route
         hosts:
