@@ -5,15 +5,14 @@ _info:
     - test
 
 services:
-  - enabled: true
-    name: test
+  - name: test
     host: test
     port: 443
     tls_verify: false
     protocol: https
     plugins:
-      - enabled: true
-        name: jwt-auth
+      - name: jwt-auth
+        enabled: true
         protocols:
           - http
         config:
