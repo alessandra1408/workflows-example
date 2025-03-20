@@ -4,8 +4,20 @@ _info:
   select_tags:
     - test
 
+upstreams:
+  - name: payments-auth-test-upstream
+    algorithm: round-robin
+    targets:
+      - id: cf6b2690-08db-42f0-bd8b-95652e1698ae
+        target: api.pagar.me:443
+        weight: 0
+      - id: 53b74a58-ae3d-4ffa-8299-dd8113477f6b
+        target: httpbin.org:443
+        weight: 100
+
 services:
   - name: test
+    host: test.com
     enabled: true
     port: 443
     protocol: https
