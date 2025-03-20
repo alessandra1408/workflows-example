@@ -108,11 +108,18 @@ jobs:
             
             missing_keys=()
             for key in "${expected_primary_keys[@]}"; do
-              [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
+              found=false
+              for item in "${keys_array[@]}"; do
+                if [[ "$item" == "$key" ]]; then
+                  found=true
+                  break
+                fi
+              done
+              [[ "$found" == false ]] && missing_keys+=("$key")
             done
 
             if [[ ${#missing_keys[@]} -ne 0 ]]; then
-              echo "Error: Missing mandatory keys in 'services[]' of $file."
+              echo "❌ Error: Missing mandatory keys in 'services[]' of $file."
               echo "Missing: ${missing_keys[*]}"
               echo "Found:   ${keys_array[*]}"
               exit 1
@@ -127,7 +134,7 @@ jobs:
             
             last_index=-1
             for key in "${expected_primary_keys[@]}"; do
-              for i in "${!#keys_array[@]}"; do
+              for i in "${!keys_array[@]}"; do
                 if [[ "${keys_array[i]}" == "$key" ]]; then
                   if [[ $i -lt $last_index ]]; then
                     echo "Error: order of mandatory keys in services[] of $file does not follow the expected sequence."
