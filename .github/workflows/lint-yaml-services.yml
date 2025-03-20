@@ -126,7 +126,7 @@ jobs:
             fi
           done
 
-           if ! mapfile -t service_key_list < <($YQ_PATH -e '.services[] | keys | join(" ")' "$file"); then
+          if ! mapfile -t service_key_list < <($YQ_PATH -e '.services[] | keys | join(" ")' "$file"); then
             echo "Error: Failed to parse YAML file for route keys: $file"
             echo "service_key_list: $service_key_list"
             exit 1
