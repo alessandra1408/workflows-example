@@ -7,7 +7,6 @@ _info:
 services:
   - name: test
     enabled: true
-    host: test
     port: 443
     protocol: https
     tls_verify: false
@@ -15,7 +14,7 @@ services:
       - name: jwt-auth
         enabled: true
         protocols:
-          - http
+          - https
         config:
           header-keys:
             - Authorization
