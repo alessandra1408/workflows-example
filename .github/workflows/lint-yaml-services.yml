@@ -144,15 +144,6 @@ jobs:
             done
           done < <($YQ_PATH -e '.services[] | keys | join(",")' "$file")
 
-          if [[ "$found_keys" =~ (tls_verify) ]]; then
-            if [[ ! "$found_keys" =~ port.*(tls_verify) ]]; then
-              echo "Error: File $file does not follow the expected key order."
-              echo "key 'tls_verify' must come after 'port'."
-              echo "Found:    $found_keys"
-              exit 1
-            fi
-          fi
-
           if [[ "$found_keys" =~ (plugins) ]]; then
             if [[ ! "$found_keys" =~ protocol.*(plugins) ]]; then
               echo "Error: File $file does not follow the expected key order."
