@@ -101,36 +101,57 @@ jobs:
           fi
 
           expected_primary_keys=("name" "enabled" "host" "port" "protocol" "routes" "tags")
-          found_keys_list=$($YQ_PATH -e '.services[] | keys | join(",")' "$file")
+          # found_keys_list=$($YQ_PATH -e '.services[] | keys | join(",")' "$file")
 
-          for found_keys in $found_keys_list; do
-            IFS=',' read -ra keys_array <<< "$found_keys"
+          # for found_keys in $found_keys_list; do
+          #   IFS=',' read -ra keys_array <<< "$found_keys"
             
-            missing_keys=()
-            for key in "${expected_primary_keys[@]}"; do
-              [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
-            done
+          #   missing_keys=()
+          #   for key in "${expected_primary_keys[@]}"; do
+          #     [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
+          #   done
 
-            if [[ ${#missing_keys[@]} -ne 0 ]]; then
-              echo "Error: Missing mandatory keys in 'services[]' of $file."
-              echo "Missing: ${missing_keys[*]}"
-              echo "Found:   ${keys_array[*]}"
-              exit 1
-            fi
-          done
+          #   if [[ ${#missing_keys[@]} -ne 0 ]]; then
+          #     echo "Error: Missing mandatory keys in 'services[]' of $file."
+          #     echo "Missing: ${missing_keys[*]}"
+          #     echo "Found:   ${keys_array[*]}"
+          #     exit 1
+          #   fi
+          # done
 
           while IFS= read -r route_keys; do
             IFS=' ' read -ra keys_array <<< "$route_keys"
 
-            echo "Found keys: $route_keys"
             echo "DEBUG: Found keys: ${keys_array[*]}"
-            
+
+            # Verifica se todas as chaves obrigatórias estão presentes
+            missing_keys=()
+            for key in "${expected_primary_keys[@]}"; do
+              found=false
+              for item in "${keys_array[@]}"; do
+                if [[ "$item" == "$key" ]]; then
+                  found=true
+                  break
+                fi
+              done
+              [[ "$found" == false ]] && missing_keys+=("$key")
+            done
+
+            # Se alguma chave estiver faltando, exibe erro e sai
+            if [[ ${#missing_keys[@]} -ne 0 ]]; then
+              echo "❌ Error: Missing mandatory keys in 'services[]' of $file."
+              echo "Missing: ${missing_keys[*]}"
+              echo "Found:   ${keys_array[*]}"
+              exit 1
+            fi
+
+            # Verifica a ordem das chaves
             last_index=-1
             for key in "${expected_primary_keys[@]}"; do
               for i in "${!keys_array[@]}"; do
                 if [[ "${keys_array[i]}" == "$key" ]]; then
                   if [[ $i -lt $last_index ]]; then
-                    echo "Error: order of mandatory keys in services[] of $file does not follow the expected sequence."
+                    echo "❌ Error: Order of mandatory keys in services[] of $file does not follow the expected sequence."
                     echo "Expected order: ${expected_primary_keys[*]}"
                     echo "Found order:    ${keys_array[*]}"
                     exit 1
@@ -140,7 +161,31 @@ jobs:
                 fi
               done
             done
+
           done < <($YQ_PATH -e '.services[] | keys | join(" ")' "$file")
+
+          # while IFS= read -r route_keys; do
+          #   IFS=' ' read -ra keys_array <<< "$route_keys"
+
+          #   echo "Found keys: $route_keys"
+          #   echo "DEBUG: Found keys: ${keys_array[*]}"
+            
+          #   last_index=-1
+          #   for key in "${expected_primary_keys[@]}"; do
+          #     for i in "${!keys_array[@]}"; do
+          #       if [[ "${keys_array[i]}" == "$key" ]]; then
+          #         if [[ $i -lt $last_index ]]; then
+          #           echo "Error: order of mandatory keys in services[] of $file does not follow the expected sequence."
+          #           echo "Expected order: ${expected_primary_keys[*]}"
+          #           echo "Found order:    ${keys_array[*]}"
+          #           exit 1
+          #         fi
+          #         last_index=$i
+          #         break
+          #       fi
+          #     done
+          #   done
+          # done < <($YQ_PATH -e '.services[] | keys | join(" ")' "$file")
 
           if [[ "$found_keys" =~ (tls_verify|ca_certificates) ]]; then
             if [[ ! "$found_keys" =~ port.*(tls_verify|ca_certificates) ]]; then
