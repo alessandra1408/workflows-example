@@ -16,6 +16,8 @@ services:
           - vtex-app.mundipagg.com
         protocols:
           - http
+        methods:
+          - GET
         headers:
           x-vtex-api-appkey:
             - 'acc_VDRE6ebteh5AMkAr'
