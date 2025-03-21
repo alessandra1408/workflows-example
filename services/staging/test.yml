@@ -2,29 +2,28 @@ _format_version: "3.0"
 _info:
   defaults: {}
   select_tags:
-    - test
-
+    - vtex-karavela-by-account
 services:
-  - name: test
+  - name: vtex-karavela-by-account
     enabled: true
-    host: test
+    host: hub-vtex.karavela-shared-pci-prd.aws.karavela.run
     port: 443
-    tls_verify: false
     protocol: https
+    tls_verify: false
     routes:
-      - hosts:
-          - test.com
-        name: test-route
-        methods:
-          - POST
-        paths:
-          - /auth/teste
+      - name: vtex-karavela-by-account-root
+        hosts:
+          - vtex-app.mundipagg.com
         protocols:
-          - https
+          - http
+        methods:
+          - GET
+        headers:
+          x-vtex-api-appkey:
+            - 'acc_VDRE6ebteh5AMkAr'
+        paths:
+          - /
         strip_path: false
-
+        preserve_host: false
     tags:
-      - test
-
-# deixando as keys principais corretas, mas errado dentro de routes para teste
-
+      - vtex-karavela-by-account
