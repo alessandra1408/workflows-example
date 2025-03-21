@@ -6,7 +6,7 @@ _info:
 services:
   - name: payments-locker
     enabled: true
-    host: payments-locker-api.platform-k8s-prd.aws.pagarme.run
+    host: payments-locker-xxxx
     port: 443
     tls_verify: false
     protocol: https
