@@ -21,7 +21,5 @@ services:
         paths:
           - /api/locker/data
         strip_path: false
-
     tags:
       - payments-locker
-      
