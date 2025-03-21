@@ -3,10 +3,9 @@ name: Lint YAML services
 on:
   pull_request:
     paths:
-      - "services/staging/test.yml"
+      - "services/*/*"
     branches:
       - "main"
-      - "feat/add-new-test-service-stg"
 env:
   YQ_VERSION: 4.45.1
   YAMLLINT_VERSION: 1.32.0
@@ -52,7 +51,7 @@ jobs:
           key: yq-${{ env.YQ_VERSION }}
           path: ${{ github.workspace }}/yq
           restore-keys: yq
-  
+
       - name: Download yq
         if: steps.cache-yq.outputs.cache-hit != 'true'
         run: |
@@ -67,7 +66,7 @@ jobs:
         with:
           key: yq-${{ env.YQ_VERSION }}
           path: ${{ github.workspace }}/yq
-          
+
       - name: Get yamllint from cache
         id: cache-yamllint
         uses: actions/cache@v4
@@ -76,7 +75,7 @@ jobs:
           key: pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ env.YAMLLINT_VERSION }}
           restore-keys: |
             pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
-    
+
       - name: Install yamllint
         if: steps.cache-yamllint.outputs.cache-hit != 'true'
         run: pip install --cache-dir ~/.cache/pip --upgrade yamllint==${{ env.YAMLLINT_VERSION }}
@@ -161,57 +160,59 @@ jobs:
           fi
 
           expected_plugin_keys=("name" "enabled" "protocols" "config")
-          found_keys_list=$($YQ_PATH -e '.services[].plugins[] | keys | join(",")' "$file")
+          if $YQ_PATH -e '.services[].plugins' "$file" &>/dev/null; then          
+            found_keys_list=$($YQ_PATH -e '.services[].plugins[] | keys | join(",")' "$file")
 
-          for found_keys in $found_keys_list; do
-            IFS=',' read -ra keys_array <<< "$found_keys"
-            
-            missing_keys=()
-            for key in "${expected_plugin_keys[@]}"; do
-              [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
+            for found_keys in $found_keys_list; do
+              IFS=',' read -ra keys_array <<< "$found_keys"
+              
+              missing_keys=()
+              for key in "${expected_plugin_keys[@]}"; do
+                [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
+              done
+
+              if [[ ${#missing_keys[@]} -ne 0 ]]; then
+                echo "Error: Missing mandatory keys in 'services[].plugins[]' of $file."
+                echo "Missing: ${missing_keys[*]}"
+                echo "Found:   ${keys_array[*]}"
+                exit 1
+              fi
             done
 
-            if [[ ${#missing_keys[@]} -ne 0 ]]; then
-              echo "Error: Missing mandatory keys in 'services[].plugins[]' of $file."
-              echo "Missing: ${missing_keys[*]}"
-              echo "Found:   ${keys_array[*]}"
+            while IFS= read -r keys; do
+              IFS=',' read -ra keys_array <<< "$keys"
+              
+              last_index=-1
+              for key in "${expected_plugin_keys[@]}"; do
+                for i in "${!keys_array[@]}"; do
+                  if [[ "${keys_array[i]}" == "$key" ]]; then
+                    if [[ $i -lt $last_index ]]; then
+                      echo "Error: Key order in .services[].plugins[] of $file does not follow the expected sequence."
+                      echo "Expected order: ${expected_plugin_keys[*]}"
+                      echo "Found order:    ${keys_array[*]}"
+                      exit 1
+                    fi
+                    last_index=$i
+                    break
+                  fi
+                done
+              done
+            done < <($YQ_PATH -e '.services[].plugins[] | keys | join(",")' "$file")
+
+            plugins_protocols=$($YQ_PATH eval '.services[].plugins[].protocols[]' "$file")
+            invalid_plugins_protocols=false
+
+            for protocol in $plugins_protocols; do
+              if [[ "$protocol" != "http" ]]; then
+                invalid_plugins_protocols=true
+                break
+              fi
+            done
+
+            if [[ "$invalid_plugins_protocols" == true ]]; then
+              echo "Error: Invalid plugins protocol inside 'services' in $file: Expected 'http' but got '$plugins_protocols'"
               exit 1
             fi
-          done
-
-          while IFS= read -r keys; do
-            IFS=',' read -ra keys_array <<< "$keys"
-            
-            last_index=-1
-            for key in "${expected_plugin_keys[@]}"; do
-              for i in "${!keys_array[@]}"; do
-                if [[ "${keys_array[i]}" == "$key" ]]; then
-                  if [[ $i -lt $last_index ]]; then
-                    echo "Error: Key order in .services[].plugins[] of $file does not follow the expected sequence."
-                    echo "Expected order: ${expected_plugin_keys[*]}"
-                    echo "Found order:    ${keys_array[*]}"
-                    exit 1
-                  fi
-                  last_index=$i
-                  break
-                fi
-              done
-            done
-          done < <($YQ_PATH -e '.services[].plugins[] | keys | join(",")' "$file")
-
-          plugins_protocols=$($YQ_PATH eval '.services[].plugins[].protocols[]' "$file")
-          invalid_plugins_protocols=false
-
-          for protocol in $plugins_protocols; do
-            if [[ "$protocol" != "http" ]]; then
-              invalid_plugins_protocols=true
-              break
-            fi
-          done
-
-          if [[ "$invalid_plugins_protocols" == true ]]; then
-            echo "Error: Invalid plugins protocol inside 'services' in $file: Expected 'http' but got '$plugins_protocols'"
-            exit 1
           fi
 
           expected_route_keys=("name" "protocols" "methods" "paths")
@@ -254,43 +255,60 @@ jobs:
           done < <($YQ_PATH -e '.services[].routes[] | keys | join(",")' "$file")
 
           expected_plugin_route_keys=("name" "enabled" "protocols" "config")
-          found_keys_list=$($YQ_PATH -e '.services[].routes[].plugins[] | keys | join(",")' "$file")
+          if $YQ_PATH -e '.services[].routes[].plugins' "$file" &>/dev/null; then
+            found_keys_list=$($YQ_PATH -e '.services[].routes[].plugins[] | keys | join(",")' "$file")
 
-          for found_keys in $found_keys_list; do
-            IFS=',' read -ra keys_array <<< "$found_keys"
-            
-            missing_keys=()
-            for key in "${expected_plugin_route_keys[@]}"; do
-              [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
+            for found_keys in $found_keys_list; do
+              IFS=',' read -ra keys_array <<< "$found_keys"
+              
+              missing_keys=()
+              for key in "${expected_plugin_route_keys[@]}"; do
+                [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
+              done
+
+              if [[ ${#missing_keys[@]} -ne 0 ]]; then
+                echo "Error: Missing mandatory keys in 'routes[].plugins[]' of $file."
+                echo "Missing: ${missing_keys[*]}"
+                echo "Found:   ${keys_array[*]}"
+                exit 1
+              fi
             done
 
-            if [[ ${#missing_keys[@]} -ne 0 ]]; then
-              echo "Error: Missing mandatory keys in 'routes[].plugins[]' of $file."
-              echo "Missing: ${missing_keys[*]}"
-              echo "Found:   ${keys_array[*]}"
+            while IFS= read -r keys; do
+              IFS=',' read -ra keys_array <<< "$keys"
+              
+              last_index=-1
+              for key in "${expected_plugin_route_keys[@]}"; do
+                for i in "${!keys_array[@]}"; do
+                  if [[ "${keys_array[i]}" == "$key" ]]; then
+                    if [[ $i -lt $last_index ]]; then
+                      echo "Error: order of mandatory keys in .services[].routes[].plugins[] of $file does not follow the expected sequence."
+                      echo "Expected order: ${expected_plugin_route_keys[*]}"
+                      echo "Found order:    ${keys_array[*]}"
+                      exit 1
+                    fi
+                    last_index=$i
+                    break
+                  fi
+                done
+              done
+            done < <($YQ_PATH -e '.services[].routes[].plugins[] | keys | join(",")' "$file")
+
+            plugins_routes_protocols=$($YQ_PATH eval '.services[].routes[].plugins[].protocols[]' "$file")
+            invalid_plugins_routes_protocols=false
+
+            for protocol in $plugins_routes_protocols; do
+              if [[ "$protocol" != "http" ]]; then
+                invalid_plugins_routes_protocols=true
+                break
+              fi
+            done
+
+            if [[ "$invalid_plugins_routes_protocols" == true ]]; then
+              echo "Error: Invalid plugins protocol inside 'routes' in $file: Expected 'http' but got '$plugins_routes_protocols'"
               exit 1
             fi
-          done
-
-          while IFS= read -r keys; do
-            IFS=',' read -ra keys_array <<< "$keys"
-            
-            last_index=-1
-            for key in "${expected_plugin_route_keys[@]}"; do
-              for i in "${!keys_array[@]}"; do
-                if [[ "${keys_array[i]}" == "$key" ]]; then
-                  if [[ $i -lt $last_index ]]; then
-                    echo "Error: order of mandatory keys in .services[].routes[].plugins[] of $file does not follow the expected sequence."
-                    echo "Expected order: ${expected_plugin_route_keys[*]}"
-                    echo "Found order:    ${keys_array[*]}"
-                    exit 1
-                  fi
-                  last_index=$i
-                  break
-                fi
-              done
-            done
-          done < <($YQ_PATH -e '.services[].routes[].plugins[] | keys | join(",")' "$file")
+          fi
 
           routes_protocols=$($YQ_PATH eval '.services[].routes[].protocols[]' "$file")
           invalid_routes_protocols=false
@@ -307,17 +325,4 @@ jobs:
             exit 1
           fi
 
-          plugins_protocols=$($YQ_PATH eval '.services[].routes[].plugins[].protocols[]' "$file")
-          invalid_plugins_protocols=false
-
-          for protocol in $plugins_protocols; do
-            if [[ "$protocol" != "http" ]]; then
-              invalid_plugins_protocols=true
-              break
-            fi
-          done
-
-          if [[ "$invalid_plugins_protocols" == true ]]; then
-            echo "Error: Invalid plugins protocol inside 'routes' in $file: Expected 'http' but got '$plugins_protocols'"
-            exit 1
-          fi
+          
