@@ -24,3 +24,4 @@ services:
 
     tags:
       - payments-locker
+      
