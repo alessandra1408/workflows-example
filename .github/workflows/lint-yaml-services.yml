@@ -67,18 +67,8 @@ jobs:
           key: yq-${{ env.YQ_VERSION }}
           path: ${{ github.workspace }}/yq
 
-      - name: Get yamllint from cache
-        id: cache-yamllint
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ env.YAMLLINT_VERSION }}
-          restore-keys: |
-            pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
-
       - name: Install yamllint
-        if: steps.cache-yamllint.outputs.cache-hit != 'true'
-        run: pip install --cache-dir ~/.cache/pip --upgrade yamllint==${{ env.YAMLLINT_VERSION }}
+        run: pip install yamllint==${{ env.YAMLLINT_VERSION }}
 
       - name: Validate YAML with yamllint
         run: |
@@ -97,51 +87,55 @@ jobs:
           expected_primary_keys=("name" "enabled" "host" "port" "protocol" "routes" "tags")
 
           if $YQ_PATH -e '.upstreams[]' "$file" &>/dev/null; then
-            if $YQ_PATH -e '.services[] | has("host")' "$file" &>/dev/null || \
-              $YQ_PATH -e '.services[] | has("port")' "$file" &>/dev/null; then
-              echo "Error: 'host' and 'port' must NOT be present in 'services[]' when 'upstreams' is defined."
+            if  $YQ_PATH -e '.services[] | has("port")' "$file" &>/dev/null; then
+              echo "Error: 'port' must NOT be present in 'services[]' when 'upstreams' is defined."
               exit 1
             fi
-            expected_primary_keys=("name" "enabled" "protocol" "routes" "tags")
+            expected_primary_keys=("name" "enabled" "host" "protocol" "routes" "tags")
           fi
 
-          found_keys_list=$($YQ_PATH -e '.services[] | keys | join(",")' "$file")
+          verify_match(){
 
-          for found_keys in $found_keys_list; do
-            IFS=',' read -ra keys_array <<< "$found_keys"
+            found_keys_list=$($YQ_PATH -e '$path | keys | join(",")' "$file")
 
-            missing_keys=()
-            for key in "${expected_primary_keys[@]}"; do
-              [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
-            done
+            for found_keys in $found_keys_list; do
+              IFS=',' read -ra keys_array <<< "$found_keys"
 
-            if [[ ${#missing_keys[@]} -ne 0 ]]; then
-              echo "Error: Missing mandatory keys in 'services[]' of $file."
-              echo "Missing: ${missing_keys[*]}"
-              echo "Found:   ${keys_array[*]}"
-              exit 1
-            fi
-          done
-
-          while IFS= read -r keys; do
-            IFS=',' read -ra keys_array <<< "$keys"
-            
-            last_index=-1
-            for key in "${expected_primary_keys[@]}"; do
-              for i in "${!keys_array[@]}"; do
-                if [[ "${keys_array[i]}" == "$key" ]]; then
-                  if [[ $i -lt $last_index ]]; then
-                    echo "Error: Key order in .services[] of $file does not follow the expected sequence."
-                    echo "Expected order: ${expected_primary_keys[*]}"
-                    echo "Found order:    ${keys_array[*]}"
-                    exit 1
-                  fi
-                  last_index=$i
-                  break
-                fi
+              missing_keys=()
+              for key in "${$expected_keys[@]}"; do
+                [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
               done
+
+              if [[ ${#missing_keys[@]} -ne 0 ]]; then
+                echo "Error: Missing mandatory keys in '$path' of $file."
+                echo "Missing: ${missing_keys[*]}"
+                echo "Found:   ${keys_array[*]}"
+                exit 1
+              fi
             done
-          done < <($YQ_PATH -e '.services[] | keys | join(",")' "$file")
+
+            while IFS= read -r keys; do
+              IFS=',' read -ra keys_array <<< "$keys"
+              
+              last_index=-1
+              for key in "${$expected_keys[@]}"; do
+                for i in "${!keys_array[@]}"; do
+                  if [[ "${keys_array[i]}" == "$key" ]]; then
+                    if [[ $i -lt $last_index ]]; then
+                      echo "Error: Key order in $path of $file does not follow the expected sequence."
+                      echo "Expected order: ${$expected_keys[*]}"
+                      echo "Found order:    ${keys_array[*]}"
+                      exit 1
+                    fi
+                    last_index=$i
+                    break
+                  fi
+                done
+              done
+            done < <($YQ_PATH -e '$path | keys | join(",")' "$file")
+          }
+
+          verify_match .services[] expected_primary_keys
 
           if [[ "$found_keys" =~ (plugins) ]]; then
             if [[ ! "$found_keys" =~ protocol.*(plugins) ]]; then
@@ -160,44 +154,8 @@ jobs:
           fi
 
           expected_plugin_keys=("name" "enabled" "protocols" "config")
-          if $YQ_PATH -e '.services[].plugins' "$file" &>/dev/null; then          
-            found_keys_list=$($YQ_PATH -e '.services[].plugins[] | keys | join(",")' "$file")
-
-            for found_keys in $found_keys_list; do
-              IFS=',' read -ra keys_array <<< "$found_keys"
-              
-              missing_keys=()
-              for key in "${expected_plugin_keys[@]}"; do
-                [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
-              done
-
-              if [[ ${#missing_keys[@]} -ne 0 ]]; then
-                echo "Error: Missing mandatory keys in 'services[].plugins[]' of $file."
-                echo "Missing: ${missing_keys[*]}"
-                echo "Found:   ${keys_array[*]}"
-                exit 1
-              fi
-            done
-
-            while IFS= read -r keys; do
-              IFS=',' read -ra keys_array <<< "$keys"
-              
-              last_index=-1
-              for key in "${expected_plugin_keys[@]}"; do
-                for i in "${!keys_array[@]}"; do
-                  if [[ "${keys_array[i]}" == "$key" ]]; then
-                    if [[ $i -lt $last_index ]]; then
-                      echo "Error: Key order in .services[].plugins[] of $file does not follow the expected sequence."
-                      echo "Expected order: ${expected_plugin_keys[*]}"
-                      echo "Found order:    ${keys_array[*]}"
-                      exit 1
-                    fi
-                    last_index=$i
-                    break
-                  fi
-                done
-              done
-            done < <($YQ_PATH -e '.services[].plugins[] | keys | join(",")' "$file")
+          if $YQ_PATH -e '.services[].plugins' "$file" &>/dev/null; then 
+            verify_match .services[].plugins[] expected_plugin_keys
 
             plugins_protocols=$($YQ_PATH eval '.services[].plugins[].protocols[]' "$file")
             invalid_plugins_protocols=false
@@ -215,84 +173,12 @@ jobs:
             fi
           fi
 
-          expected_route_keys=("name" "protocols" "methods" "paths")
-          found_keys_list=$($YQ_PATH -e '.services[].routes[] | keys | join(",")' "$file")
-
-          for found_keys in $found_keys_list; do
-            IFS=',' read -ra keys_array <<< "$found_keys"
-            
-            missing_keys=()
-            for key in "${expected_route_keys[@]}"; do
-              [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
-            done
-
-            if [[ ${#missing_keys[@]} -ne 0 ]]; then
-              echo "Error: Missing mandatory keys in 'services[].routes[]' of $file."
-              echo "Missing: ${missing_keys[*]}"
-              echo "Found:   ${keys_array[*]}"
-              exit 1
-            fi
-          done
-
-          while IFS= read -r keys; do
-            IFS=',' read -ra keys_array <<< "$keys"
-            
-            last_index=-1
-            for key in "${expected_route_keys[@]}"; do
-              for i in "${!keys_array[@]}"; do
-                if [[ "${keys_array[i]}" == "$key" ]]; then
-                  if [[ $i -lt $last_index ]]; then
-                    echo "Error: Key order in .services[].routes[] of $file does not follow the expected sequence."
-                    echo "Expected order: ${expected_route_keys[*]}"
-                    echo "Found order:    ${keys_array[*]}"
-                    exit 1
-                  fi
-                  last_index=$i
-                  break
-                fi
-              done
-            done
-          done < <($YQ_PATH -e '.services[].routes[] | keys | join(",")' "$file")
+          expected_route_keys=("name" "protocols" "paths")
+          verify_match .services[].routes[] expected_route_keys
 
           expected_plugin_route_keys=("name" "enabled" "protocols" "config")
           if $YQ_PATH -e '.services[].routes[].plugins' "$file" &>/dev/null; then
-            found_keys_list=$($YQ_PATH -e '.services[].routes[].plugins[] | keys | join(",")' "$file")
-
-            for found_keys in $found_keys_list; do
-              IFS=',' read -ra keys_array <<< "$found_keys"
-              
-              missing_keys=()
-              for key in "${expected_plugin_route_keys[@]}"; do
-                [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
-              done
-
-              if [[ ${#missing_keys[@]} -ne 0 ]]; then
-                echo "Error: Missing mandatory keys in 'routes[].plugins[]' of $file."
-                echo "Missing: ${missing_keys[*]}"
-                echo "Found:   ${keys_array[*]}"
-                exit 1
-              fi
-            done
-
-            while IFS= read -r keys; do
-              IFS=',' read -ra keys_array <<< "$keys"
-              
-              last_index=-1
-              for key in "${expected_plugin_route_keys[@]}"; do
-                for i in "${!keys_array[@]}"; do
-                  if [[ "${keys_array[i]}" == "$key" ]]; then
-                    if [[ $i -lt $last_index ]]; then
-                      echo "Error: order of mandatory keys in .services[].routes[].plugins[] of $file does not follow the expected sequence."
-                      echo "Expected order: ${expected_plugin_route_keys[*]}"
-                      echo "Found order:    ${keys_array[*]}"
-                      exit 1
-                    fi
-                    last_index=$i
-                    break
-                  fi
-                done
-              done
-            done < <($YQ_PATH -e '.services[].routes[].plugins[] | keys | join(",")' "$file")
+            verify_match .services[].routes[].plugins[] expected_plugin_route_keys
 
             plugins_routes_protocols=$($YQ_PATH eval '.services[].routes[].plugins[].protocols[]' "$file")
             invalid_plugins_routes_protocols=false
@@ -326,3 +212,4 @@ jobs:
           fi
 
           
+       
