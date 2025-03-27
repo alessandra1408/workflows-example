@@ -95,17 +95,16 @@ jobs:
           fi
 
           verify_match(){
-
             echo "primeiro argumento: $1"
-            echo "segundo argumento: $2"
+            echo "segundo argumento: $(eval echo "\${$2[*]}")"
 
-            found_keys_list=$($YQ_PATH -e '$1 | keys | join(",")' "$file")
+            found_keys_list=$($YQ_PATH -e "$1 | keys | join(\",\")" "$file")
 
             for found_keys in $found_keys_list; do
               IFS=',' read -ra keys_array <<< "$found_keys"
 
               missing_keys=()
-              for key in "${$2[@]}"; do
+              for key in $(eval echo "\${$2[@]}"); do
                 [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
               done
 
@@ -121,12 +120,12 @@ jobs:
               IFS=',' read -ra keys_array <<< "$keys"
               
               last_index=-1
-              for key in "${$2[@]}"; do
+              for key in $(eval echo "\${$2[@]}"); do
                 for i in "${!keys_array[@]}"; do
                   if [[ "${keys_array[i]}" == "$key" ]]; then
                     if [[ $i -lt $last_index ]]; then
                       echo "Error: Key order in $1 of $file does not follow the expected sequence."
-                      echo "Expected order: ${$2[*]}"
+                      echo "Expected order: $(eval echo "\${$2[*]}")"
                       echo "Found order:    ${keys_array[*]}"
                       exit 1
                     fi
@@ -135,7 +134,7 @@ jobs:
                   fi
                 done
               done
-            done < <($YQ_PATH -e '$1 | keys | join(",")' "$file")
+            done < <($YQ_PATH -e "$1 | keys | join(\",\")" "$file")
           }
 
           echo "passou da funcao"
