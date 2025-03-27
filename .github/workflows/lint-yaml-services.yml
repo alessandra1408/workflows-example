@@ -135,7 +135,11 @@ jobs:
             done < <($YQ_PATH -e '$path | keys | join(",")' "$file")
           }
 
+          echo "passou da funcao"
+
           verify_match .services[] expected_primary_keys
+
+          echo "passou da 1a verificacao"
 
           if [[ "$found_keys" =~ (plugins) ]]; then
             if [[ ! "$found_keys" =~ protocol.*(plugins) ]]; then
@@ -154,8 +158,10 @@ jobs:
           fi
 
           expected_plugin_keys=("name" "enabled" "protocols" "config")
-          if $YQ_PATH -e '.services[].plugins' "$file" &>/dev/null; then 
+          if $YQ_PATH -e '.services[].plugins' "$file" &>/dev/null; then
             verify_match .services[].plugins[] expected_plugin_keys
+
+            echo "passou 2a verificacao"
 
             plugins_protocols=$($YQ_PATH eval '.services[].plugins[].protocols[]' "$file")
             invalid_plugins_protocols=false
@@ -179,6 +185,8 @@ jobs:
           expected_plugin_route_keys=("name" "enabled" "protocols" "config")
           if $YQ_PATH -e '.services[].routes[].plugins' "$file" &>/dev/null; then
             verify_match .services[].routes[].plugins[] expected_plugin_route_keys
+
+            echo "passou 3a verificacao"
 
             plugins_routes_protocols=$($YQ_PATH eval '.services[].routes[].plugins[].protocols[]' "$file")
             invalid_plugins_routes_protocols=false
@@ -211,5 +219,3 @@ jobs:
             exit 1
           fi
 
-          
-       
