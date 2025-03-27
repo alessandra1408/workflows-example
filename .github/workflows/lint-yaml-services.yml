@@ -96,6 +96,9 @@ jobs:
 
           verify_match(){
 
+            echo "primeiro argumento: $1"
+            echo "segundo argumento: $2"
+
             found_keys_list=$($YQ_PATH -e '$1 | keys | join(",")' "$file")
 
             for found_keys in $found_keys_list; do
