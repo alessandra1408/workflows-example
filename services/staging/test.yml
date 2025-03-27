@@ -2,29 +2,63 @@ _format_version: "3.0"
 _info:
   defaults: {}
   select_tags:
-    - test
-
+    - vtex-karavela-by-account
 services:
-  - name: test
+  - name: vtex-karavela-by-account
     enabled: true
-    host: test
+    host: hub-vtex.karavela-shared-pci-prd.aws.karavela.run
     port: 443
-    tls_verify: false
     protocol: https
-    routes:
-      - hosts:
-          - test.com
-        name: test-route
-        methods:
-          - POST
-        paths:
-          - /auth/teste
+    tls_verify: false
+    plugins:
+      - name: request-transformer
+        enabled: true
         protocols:
-          - https
+          - http
+        config:
+          add:
+            body: []
+            headers:
+              - "X-Api-Version: v5"
+            querystring: []
+          append:
+            body: []
+            headers: []
+            querystring: []
+          rename:
+            body: []
+            headers: []
+            querystring: []
+          remove:
+            body: []
+            headers: []
+            querystring: []
+          replace:
+            body: []
+            headers: []
+            querystring: []
+            uri: null
+    routes:
+      - name: vtex-karavela-by-account-root
+        hosts:
+          - vtex-app.mundipagg.com
+        protocols:
+          - http
+        methods:
+          - GET
+        headers:
+          x-vtex-api-appkey:
+            - 'acc_VDRE6ebteh5AMkAr'
+        paths:
+          - /
         strip_path: false
-
+        preserve_host: false
+        plugins:
+          - name: kong-plugin-url-rewrite
+            enabled: true
+            protocols:
+              - http
+            config:
+              url: /1/receivable_units
     tags:
-      - test
-
-# deixando as keys principais corretas, mas errado dentro de routes para teste
-
+      - vtex-karavela-by-account
