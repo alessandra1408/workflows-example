@@ -96,18 +96,18 @@ jobs:
 
           verify_match(){
 
-            found_keys_list=$($YQ_PATH -e '$path | keys | join(",")' "$file")
+            found_keys_list=$($YQ_PATH -e '$1 | keys | join(",")' "$file")
 
             for found_keys in $found_keys_list; do
               IFS=',' read -ra keys_array <<< "$found_keys"
 
               missing_keys=()
-              for key in "${$expected_keys[@]}"; do
+              for key in "${$2[@]}"; do
                 [[ ! " ${keys_array[*]} " =~ " ${key} " ]] && missing_keys+=("$key")
               done
 
               if [[ ${#missing_keys[@]} -ne 0 ]]; then
-                echo "Error: Missing mandatory keys in '$path' of $file."
+                echo "Error: Missing mandatory keys in '$1' of $file."
                 echo "Missing: ${missing_keys[*]}"
                 echo "Found:   ${keys_array[*]}"
                 exit 1
@@ -118,12 +118,12 @@ jobs:
               IFS=',' read -ra keys_array <<< "$keys"
               
               last_index=-1
-              for key in "${$expected_keys[@]}"; do
+              for key in "${$2[@]}"; do
                 for i in "${!keys_array[@]}"; do
                   if [[ "${keys_array[i]}" == "$key" ]]; then
                     if [[ $i -lt $last_index ]]; then
-                      echo "Error: Key order in $path of $file does not follow the expected sequence."
-                      echo "Expected order: ${$expected_keys[*]}"
+                      echo "Error: Key order in $1 of $file does not follow the expected sequence."
+                      echo "Expected order: ${$2[*]}"
                       echo "Found order:    ${keys_array[*]}"
                       exit 1
                     fi
@@ -132,7 +132,7 @@ jobs:
                   fi
                 done
               done
-            done < <($YQ_PATH -e '$path | keys | join(",")' "$file")
+            done < <($YQ_PATH -e '$1 | keys | join(",")' "$file")
           }
 
           echo "passou da funcao"
