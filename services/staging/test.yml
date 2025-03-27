@@ -10,6 +10,34 @@ services:
     port: 443
     protocol: https
     tls_verify: false
+    plugins:
+      - name: request-transformer
+        enabled: true
+        protocols:
+          - http
+        config:
+          add:
+            body: []
+            headers:
+              - "X-Api-Version: v5"
+            querystring: []
+          append:
+            body: []
+            headers: []
+            querystring: []
+          rename:
+            body: []
+            headers: []
+            querystring: []
+          remove:
+            body: []
+            headers: []
+            querystring: []
+          replace:
+            body: []
+            headers: []
+            querystring: []
+            uri: null
     routes:
       - name: vtex-karavela-by-account-root
         hosts:
@@ -25,5 +53,12 @@ services:
           - /
         strip_path: false
         preserve_host: false
+        plugins:
+          - name: kong-plugin-url-rewrite
+            enabled: true
+            protocols:
+              - http
+            config:
+              url: /1/receivable_units
     tags:
       - vtex-karavela-by-account
