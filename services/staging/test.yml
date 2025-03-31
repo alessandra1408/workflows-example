@@ -57,7 +57,7 @@ services:
           - name: kong-plugin-url-rewrite
             enabled: true
             protocols:
-              - https
+              - http
             config:
               url: /1/receivable_units
     tags:
