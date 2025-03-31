@@ -135,11 +135,13 @@ jobs:
           }
 
           verify_only_http_protocols() {
+            local identifier="$1"
+            shift
             local protocols_list=("$@")
 
             for protocol in "${protocols_list[@]}"; do
               if [[ "$protocol" != "http" ]]; then
-                echo "Error: Invalid '$1' protocols in $file: Expected 'http' but got '$protocol'"
+                echo "Error: Invalid '$identifier' protocols in $file: Expected 'http' but got '$protocol'"
                 return 1
               fi
             done
