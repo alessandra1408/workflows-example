@@ -14,7 +14,7 @@ services:
       - name: request-transformer
         enabled: true
         protocols:
-          - http
+          - https
         config:
           add:
             body: []
@@ -43,7 +43,7 @@ services:
         hosts:
           - vtex-app.mundipagg.com
         protocols:
-          - https
+          - http
         methods:
           - GET
         headers:
@@ -57,7 +57,7 @@ services:
           - name: kong-plugin-url-rewrite
             enabled: true
             protocols:
-              - http
+              - https
             config:
               url: /1/receivable_units
     tags:
