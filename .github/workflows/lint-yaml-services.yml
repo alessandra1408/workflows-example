@@ -139,7 +139,7 @@ jobs:
 
             for protocol in "${protocols_list[@]}"; do
               if [[ "$protocol" != "http" ]]; then
-                echo "Error: Invalid protocol found. Expected only 'http', but got '$protocol'"
+                echo "Error: Invalid '$1' protocols in $file: Expected 'http' but got '$protocol'"
                 return 1
               fi
             done
@@ -169,8 +169,7 @@ jobs:
 
             plugins_protocols=$($YQ_PATH eval '.services[].plugins[].protocols[]' "$file")
 
-            if ! verify_only_http_protocols "${plugins_protocols[@]}"; then
-              echo "Error: Invalid plugins protocol inside 'services' in $file: Expected 'http' but got '$plugins_protocols'"
+            if ! verify_only_http_protocols ".services[].plugins[]" "${plugins_protocols[@]}" ; then
               exit 1
             fi
           fi
@@ -184,16 +183,14 @@ jobs:
 
             plugins_routes_protocols=$($YQ_PATH eval '.services[].routes[].plugins[].protocols[]' "$file")
 
-            if ! verify_only_http_protocols "${plugins_routes_protocols[@]}"; then
-              echo "Error: Invalid plugins protocol inside 'routes' in $file: Expected 'http' but got '$plugins_routes_protocols'"
+            if ! verify_only_http_protocols ".routes[].plugins[]" "${plugins_routes_protocols[@]}"; then
               exit 1
             fi
           fi
 
           routes_protocols=$($YQ_PATH eval '.services[].routes[].protocols[]' "$file")
           
-          if ! verify_only_http_protocols "${routes_protocols[@]}"; then
-            echo "Error: Invalid routes protocol in $file: Expected 'http' but got '$routes_protocols'"
+          if ! verify_only_http_protocols ".services[].routes[] " "${routes_protocols[@]}"; then
             exit 1
           fi
 
