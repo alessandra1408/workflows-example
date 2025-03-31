@@ -28,7 +28,7 @@ services:
           - boleto-payments-stg.stone.com.br
           - stgboleto.mundipagg.com
         protocols:
-          - http
+          - https
         methods:
           - GET
         paths:
