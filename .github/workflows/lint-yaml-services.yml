@@ -94,10 +94,7 @@ jobs:
             expected_primary_keys=("name" "enabled" "host" "protocol" "routes" "tags")
           fi
 
-          verify_match(){
-            echo "primeiro argumento: $1"
-            echo "segundo argumento: $(eval echo "\${$2[*]}")"
-
+          verify_keys_match(){
             found_keys_list=$($YQ_PATH -e "$1 | keys | join(\",\")" "$file")
 
             for found_keys in $found_keys_list; do
@@ -137,11 +134,18 @@ jobs:
             done < <($YQ_PATH -e "$1 | keys | join(\",\")" "$file")
           }
 
-          echo "passou da funcao"
+          verify_only_http_protocols() {
+            local protocols_list=("$@")
 
-          verify_match .services[] expected_primary_keys
+            for protocol in "${protocols_list[@]}"; do
+              if [[ "$protocol" != "http" ]]; then
+                echo "Error: Invalid protocol found. Expected only 'http', but got '$protocol'"
+                return 1
+              fi
+            done
+          }
 
-          echo "passou da 1a verificacao"
+          verify_keys_match .services[] expected_primary_keys
 
           if [[ "$found_keys" =~ (plugins) ]]; then
             if [[ ! "$found_keys" =~ protocol.*(plugins) ]]; then
@@ -161,62 +165,34 @@ jobs:
 
           expected_plugin_keys=("name" "enabled" "protocols" "config")
           if $YQ_PATH -e '.services[].plugins' "$file" &>/dev/null; then
-            verify_match .services[].plugins[] expected_plugin_keys
-
-            echo "passou 2a verificacao"
+            verify_keys_match .services[].plugins[] expected_plugin_keys
 
             plugins_protocols=$($YQ_PATH eval '.services[].plugins[].protocols[]' "$file")
-            invalid_plugins_protocols=false
 
-            for protocol in $plugins_protocols; do
-              if [[ "$protocol" != "http" ]]; then
-                invalid_plugins_protocols=true
-                break
-              fi
-            done
-
-            if [[ "$invalid_plugins_protocols" == true ]]; then
+            if ! verify_only_http_protocols "${plugins_protocols[@]}"; then
               echo "Error: Invalid plugins protocol inside 'services' in $file: Expected 'http' but got '$plugins_protocols'"
               exit 1
             fi
           fi
 
           expected_route_keys=("name" "protocols" "paths")
-          verify_match .services[].routes[] expected_route_keys
+          verify_keys_match .services[].routes[] expected_route_keys
 
           expected_plugin_route_keys=("name" "enabled" "protocols" "config")
           if $YQ_PATH -e '.services[].routes[].plugins' "$file" &>/dev/null; then
-            verify_match .services[].routes[].plugins[] expected_plugin_route_keys
-
-            echo "passou 3a verificacao"
+            verify_keys_match .services[].routes[].plugins[] expected_plugin_route_keys
 
             plugins_routes_protocols=$($YQ_PATH eval '.services[].routes[].plugins[].protocols[]' "$file")
-            invalid_plugins_routes_protocols=false
 
-            for protocol in $plugins_routes_protocols; do
-              if [[ "$protocol" != "http" ]]; then
-                invalid_plugins_routes_protocols=true
-                break
-              fi
-            done
-
-            if [[ "$invalid_plugins_routes_protocols" == true ]]; then
+            if ! verify_only_http_protocols "${plugins_routes_protocols[@]}"; then
               echo "Error: Invalid plugins protocol inside 'routes' in $file: Expected 'http' but got '$plugins_routes_protocols'"
               exit 1
             fi
           fi
 
           routes_protocols=$($YQ_PATH eval '.services[].routes[].protocols[]' "$file")
-          invalid_routes_protocols=false
-
-          for protocol in $routes_protocols; do
-            if [[ "$protocol" != "http" ]]; then
-              invalid_routes_protocols=true
-              break
-            fi
-          done
-
-          if [[ "$invalid_routes_protocols" == true ]]; then
+          
+          if ! verify_only_http_protocols "${routes_protocols[@]}"; then
             echo "Error: Invalid routes protocol in $file: Expected 'http' but got '$routes_protocols'"
             exit 1
           fi
