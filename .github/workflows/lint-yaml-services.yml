@@ -169,7 +169,7 @@ jobs:
           if $YQ_PATH -e '.services[].plugins' "$file" &>/dev/null; then
             verify_keys_match .services[].plugins[] expected_plugin_keys
 
-            plugins_protocols=$($YQ_PATH eval '.services[].plugins[].protocols[]' "$file")
+            mapfile -t plugins_protocols < <($YQ_PATH eval '.services[].plugins[].protocols[]' "$file")
 
             if ! verify_only_http_protocols ".services[].plugins[]" "${plugins_protocols[@]}" ; then
               exit 1
@@ -183,14 +183,14 @@ jobs:
           if $YQ_PATH -e '.services[].routes[].plugins' "$file" &>/dev/null; then
             verify_keys_match .services[].routes[].plugins[] expected_plugin_route_keys
 
-            plugins_routes_protocols=$($YQ_PATH eval '.services[].routes[].plugins[].protocols[]' "$file")
+            mapfile -t plugins_routes_protocols < <($YQ_PATH eval '.services[].routes[].plugins[].protocols[]' "$file")
 
             if ! verify_only_http_protocols ".routes[].plugins[]" "${plugins_routes_protocols[@]}"; then
               exit 1
             fi
           fi
 
-          routes_protocols=$($YQ_PATH eval '.services[].routes[].protocols[]' "$file")
+          mapfile -t routes_protocols < <($YQ_PATH eval '.services[].routes[].protocols[]' "$file")
           
           if ! verify_only_http_protocols ".services[].routes[] " "${routes_protocols[@]}"; then
             exit 1
