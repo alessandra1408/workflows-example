@@ -14,7 +14,7 @@ services:
       - name: request-transformer
         enabled: true
         protocols:
-          - https
+          - http
         config:
           add:
             body: []
