@@ -2,63 +2,63 @@ _format_version: "3.0"
 _info:
   defaults: {}
   select_tags:
-    - vtex-karavela-by-account
+    - boleto-api
 services:
-  - name: vtex-karavela-by-account
+  - name: boleto-api
     enabled: true
-    host: hub-vtex.karavela-shared-pci-prd.aws.karavela.run
+    host: boleto-api.acquiring-stg.aws.pagarme.run
     port: 443
     protocol: https
     tls_verify: false
-    plugins:
-      - name: request-transformer
-        enabled: true
+    routes:
+      - name: boleto-api-stg-v2-register-boleto
+        hosts:
+          - boleto-payments-stg.stone.com.br
+          - stgboleto.mundipagg.com
         protocols:
           - http
-        config:
-          add:
-            body: []
-            headers:
-              - "X-Api-Version: v5"
-            querystring: []
-          append:
-            body: []
-            headers: []
-            querystring: []
-          rename:
-            body: []
-            headers: []
-            querystring: []
-          remove:
-            body: []
-            headers: []
-            querystring: []
-          replace:
-            body: []
-            headers: []
-            querystring: []
-            uri: null
-    routes:
-      - name: vtex-karavela-by-account-root
+        methods:
+          - POST
+        paths:
+          - /v2/boleto/register
+        strip_path: false
+
+      - name: boleto-api-stg-get-boleto
         hosts:
-          - vtex-app.mundipagg.com
+          - boleto-payments-stg.stone.com.br
+          - stgboleto.mundipagg.com
         protocols:
           - http
         methods:
           - GET
-        headers:
-          x-vtex-api-appkey:
-            - 'acc_VDRE6ebteh5AMkAr'
         paths:
-          - /
+          - /boleto
         strip_path: false
-        preserve_host: false
-        plugins:
-          - name: kong-plugin-url-rewrite
-            enabled: true
-            protocols:
-              - http
-            config:
-              url: /1/receivable_units
+
+      - name: boleto-api-stg-healthcheck-boleto
+        hosts:
+          - boleto-payments-stg.stone.com.br
+          - stgboleto.mundipagg.com
+        protocols:
+          - http
+        methods:
+          - GET
+        paths:
+          - /ping
+          - /healthcheck
+        strip_path: false
+
+      - name: boleto-api-stg-favicon-boleto
+        hosts:
+          - boleto-payments-stg.stone.com.br
+          - stgboleto.mundipagg.com
+        protocols:
+          - http
+        methods:
+          - GET
+        paths:
+          - /favicon.ico
+        strip_path: false
+
     tags:
-      - vtex-karavela-by-account
+      - boleto-api
