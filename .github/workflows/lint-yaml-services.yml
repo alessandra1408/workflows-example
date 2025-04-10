@@ -19,11 +19,13 @@ jobs:
         id: file_changes
         uses: trilom/file-changes-action@1.2.4
 
-      - name: Get files
+      - name: Get added/modified files
         id: files
         run: |
-          content=$(jq ".[]" $HOME/files.json | grep 'services/' | jq -R -s -c 'split("\n")[:-1]')
+          jq -r '.added[], .modified[]' "$HOME/files.json" | grep '^services/' | jq -R -s -c 'split("\n")[:-1]' > filtered.json
+          content=$(cat filtered.json)
           echo "::set-output name=files::$content"
+          
     outputs:
       files: ${{ steps.files.outputs.files }}
 
