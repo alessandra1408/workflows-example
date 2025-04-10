@@ -22,10 +22,15 @@ jobs:
       - name: Get added/modified files
         id: files
         run: |
-          jq -r '.added[], .modified[]' "$HOME/files.json" | grep '^services/' | jq -R -s -c 'split("\n")[:-1]' > filtered.json
-          content=$(cat filtered.json)
-          echo "::set-output name=files::$content"
-          
+          files=$(jq -r '.added[], .modified[]' "$HOME/files.json" | grep '^services/' || true)
+          if [[ -z "$files" ]]; then
+            echo "No files to validate."
+            echo "files=[]" >> $GITHUB_OUTPUT
+          else
+            json=$(echo "$files" | jq -R -s -c 'split("\n")[:-1]')
+            echo "files=$json" >> $GITHUB_OUTPUT
+          fi
+
     outputs:
       files: ${{ steps.files.outputs.files }}
 
