@@ -6,7 +6,7 @@ _info:
 services:
   - name: boleto-api
     enabled: true
-    host: boleto-api.acquiring-stg.aws.pagarme.run
+    host: boleto-api.acquiring-stg.aws.pagaaaarme.run
     port: 443
     protocol: https
     tls_verify: false
