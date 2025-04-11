@@ -11,7 +11,7 @@ services:
     protocol: https
     tls_verify: false
     routes:
-      - name: boleto-api-saatg-v2-register-boleto
+      - name: boletooo-api-saatg-v2-register-boleto
         hosts:
           - boleto-paayments-stg.stone.com.br
           - stgboleto.mundipagg.com
