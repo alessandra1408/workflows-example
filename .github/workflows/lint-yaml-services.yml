@@ -24,19 +24,28 @@ jobs:
         run: |
           added="${{ steps.file_changes.outputs.files_added }}"
           modified="${{ steps.file_changes.outputs.files_modified }}"
-      
-          all=$(echo -e "$added\n$modified" | sort | uniq)
-          filtered=$(echo "$all" | grep '^services/' || true)
-      
-          if [ -z "$filtered" ]; then
+          removed="${{ steps.file_changes.outputs.files_removed }}"
+
+          echo "ADDED: $added"
+          echo "MODIFIED: $modified"
+          echo "REMOVED: $removed"
+
+          all=$(echo -e "$added\n$modified" | tr ' ' '\n' | tr ',' '\n' | sort | uniq | grep -v '^$')
+          removed_clean=$(echo "$removed" | tr ' ' '\n' | tr ',' '\n' | sort | uniq | grep -v '^$')
+
+          filtered=$(comm -23 <(echo "$all" | sort) <(echo "$removed_clean" | sort))
+
+          filtered_services=$(echo "$filtered" | grep '^services/' || true)
+
+          if [ -z "$filtered_services" ]; then
             echo "No relevant service files found."
             echo "::set-output name=files=[]"
           else
-            json_list=$(echo "$filtered" | jq -R -s -c 'split("\n")[:-1]')
+            json_list=$(echo "$filtered_services" | jq -R -s -c 'split("\n")[:-1]')
             echo "::set-output name=files=$json_list"
             echo "files: $json_list"
           fi
-      
+
     outputs:
       files: ${{ steps.files.outputs.files }}
 
