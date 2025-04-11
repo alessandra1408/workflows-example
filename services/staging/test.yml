@@ -13,7 +13,7 @@ services:
     routes:
       - name: boleto-api-saatg-v2-register-boleto
         hosts:
-          - boleto-payments-stg.stone.com.br
+          - boleto-paayments-stg.stone.com.br
           - stgboleto.mundipagg.com
         protocols:
           - http
