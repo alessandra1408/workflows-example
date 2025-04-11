@@ -23,15 +23,16 @@ jobs:
         id: files
         run: |
           all_files=$(cat "$HOME/files.json")
-          filtered=$(echo "$all_files" | jq '[.[] | select(startswith("services/")]')
-
-           if [ "$(echo "$filtered" | jq 'length')" -eq 0 ]; then
-            echo "No matching files to validate."
+          filtered=$(echo "$all_files" | jq '[.[] | select(startswith("services/"))]')
+          
+          if [ "$(echo "$filtered" | jq 'length')" -eq 0 ]; then
+            echo "No matching service files to validate."
             echo "::set-output name=files=[]"
           else
             echo "::set-output name=files=$filtered"
             echo "files: $filtered"
           fi
+
           echo "::set-output name=files=$filtered"
           echo "files: $filtered"
 
