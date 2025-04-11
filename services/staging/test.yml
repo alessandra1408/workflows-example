@@ -2,29 +2,26 @@ _format_version: "3.0"
 _info:
   defaults: {}
   select_tags:
-    - test
-
+    - boleto-api
 services:
-  - name: test
+  - name: boleto-api
     enabled: true
-    host: test
+    host: boleto-api.acquiring-stg.aws.pagaaaarme.run
     port: 443
-    tls_verify: false
     protocol: https
+    tls_verify: false
     routes:
-      - hosts:
-          - test.com
-        name: test-route
+      - name: boletooo-api-saatg-v2-register-boleto
+        hosts:
+          - boleto-paayments-stg.stone.com.br
+          - stgboleto.mundipagg.com
+        protocols:
+          - http
         methods:
           - POST
         paths:
-          - /auth/teste
-        protocols:
-          - https
+          - /v2/boleto/register
         strip_path: false
 
     tags:
-      - test
-
-# deixando as keys principais corretas, mas errado dentro de routes para teste
-
+      - boleto-api
