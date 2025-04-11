@@ -15,25 +15,28 @@ jobs:
   files_changed:
     runs-on: ubuntu-latest
     steps:
-      - name: Get changed files
-        id: changed
-        uses: tj-actions/changed-files@v44
-        with:
-          files: |
-            services/**
+      - name: Get file changes
+        id: file_changes
+        uses: trilom/file-changes-action@1.2.4
 
-      - name: Set filtered files
+      - name: Get added or modified service files
         id: files
         run: |
-          if [[ "${{ steps.changed.outputs.added_files_count }}" == "0" && "${{ steps.changed.outputs.modified_files_count }}" == "0" ]]; then
-            echo "Only deletions detected. Skipping..."
-            echo "files=[]" >> $GITHUB_OUTPUT
+          added="${{ steps.file_changes.outputs.files_added }}"
+          modified="${{ steps.file_changes.outputs.files_modified }}"
+      
+          all=$(echo -e "$added\n$modified" | sort | uniq)
+          filtered=$(echo "$all" | grep '^services/' || true)
+      
+          if [ -z "$filtered" ]; then
+            echo "No relevant service files found."
+            echo "::set-output name=files=[]"
           else
-            all_files=$(jq -n --arg added "${{ steps.changed.outputs.added_files }}" --arg modified "${{ steps.changed.outputs.modified_files }}" \
-              '$added + " " + $modified | split(" ") | map(select(. != ""))')
-            echo "files=$all_files" >> $GITHUB_OUTPUT
+            json_list=$(echo "$filtered" | jq -R -s -c 'split("\n")[:-1]')
+            echo "::set-output name=files=$json_list"
+            echo "files: $json_list"
           fi
-
+      
     outputs:
       files: ${{ steps.files.outputs.files }}
 
