@@ -15,26 +15,24 @@ jobs:
   files_changed:
     runs-on: ubuntu-latest
     steps:
-      - name: Get file changes
-        id: file_changes
-        uses: trilom/file-changes-action@1.2.4
+      - name: Get changed files
+        id: changed
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            services/**
 
-      - name: Get added or modified files
+      - name: Set filtered files
         id: files
         run: |
-          all_files=$(cat "$HOME/files.json")
-          filtered=$(echo "$all_files" | jq '[.[] | select(startswith("services/"))]')
-          
-          if [ "$(echo "$filtered" | jq 'length')" -eq 0 ]; then
-            echo "No matching service files to validate."
-            echo "::set-output name=files=[]"
+          if [[ "${{ steps.changed.outputs.added_files_count }}" == "0" && "${{ steps.changed.outputs.modified_files_count }}" == "0" ]]; then
+            echo "Only deletions detected. Skipping..."
+            echo "files=[]" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=files=$filtered"
-            echo "files: $filtered"
+            all_files=$(jq -n --arg added "${{ steps.changed.outputs.added_files }}" --arg modified "${{ steps.changed.outputs.modified_files }}" \
+              '$added + " " + $modified | split(" ") | map(select(. != ""))')
+            echo "files=$all_files" >> $GITHUB_OUTPUT
           fi
-
-          echo "::set-output name=files=$filtered"
-          echo "files: $filtered"
 
     outputs:
       files: ${{ steps.files.outputs.files }}
