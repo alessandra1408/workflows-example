@@ -25,7 +25,7 @@ jobs:
           all_files=$(cat $HOME/files.json | jq '."added" + ."modified"')
           filtered=$(echo "$all_files" | jq '[.[] | select(startswith("services/"))]')
           echo "::set-output name=files=$filtered"
-      
+          echo "files: $filtered"
 
     outputs:
       files: ${{ steps.files.outputs.files }}
