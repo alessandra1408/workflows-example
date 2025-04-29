@@ -33,10 +33,11 @@ jobs:
           if [ "$added" = "[]" ] && [ "$modified" = "[]" ]; then
             echo "No added or modified files detected. Exiting."
             exit 0
+          else
+            echo "Files was found"
+            ontent=$(jq ".[]" $HOME/files.json | grep 'services/' | jq -R -s -c 'split("\n")[:-1]')
+            echo "::set-output name=files::$content"
           fi
-
-          content=$(jq ".[]" $HOME/files.json | grep 'services/' | jq -R -s -c 'split("\n")[:-1]')
-          echo "::set-output name=files::$content"
 
     outputs:
       files: ${{ steps.files.outputs.files }}
