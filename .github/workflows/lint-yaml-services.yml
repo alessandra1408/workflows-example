@@ -30,22 +30,13 @@ jobs:
           echo "MODIFIED: $modified"
           echo "REMOVED: $removed"
 
-          all=$(echo -e "$added\n$modified" | tr ' ' '\n' | tr ',' '\n' | sort | uniq | grep -v '^$')
-          removed_clean=$(echo "$removed" | tr ' ' '\n' | tr ',' '\n' | sort | uniq | grep -v '^$')
-
-          filtered=$(comm -23 <(echo "$all" | sort) <(echo "$removed_clean" | sort))
-
-          filtered_services=$(echo "$filtered" | grep '^services/' || true)
-
-          if [ -z "$filtered_services" ] && [ -n "$removed_clean" ]; then
-            echo "Only removed service files detected. Skipping further steps."
-            echo "::set-output name=files=[]"
+          if [ -z "$added" ] && [ -z "$modified" ]; then
+            echo "No added or modified files detected. Exiting."
             exit 0
-          else
-            json_list=$(echo "$filtered_services" | jq -R -s -c 'split("\n")[:-1]')
-            echo "::set-output name=files=$json_list"
-            echo "files: $json_list"
           fi
+
+          content=$(jq ".[]" $HOME/files.json | grep 'services/' | jq -R -s -c 'split("\n")[:-1]')
+          echo "::set-output name=files::$content"
 
     outputs:
       files: ${{ steps.files.outputs.files }}
