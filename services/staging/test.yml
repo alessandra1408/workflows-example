@@ -1,0 +1,29 @@
+_format_version: "3.0"
+_info:
+  defaults: {}
+  select_tags:
+    - test
+
+services:
+  - name: test
+    enabled: true
+    host: test
+    port: 443
+    tls_verify: false
+    protocol: https
+    routes:
+      - name: test-route
+        hosts:
+          - test.com
+        protocols:
+          - https
+        methods:
+          - POST
+        paths:
+          - /auth/teste
+        strip_path: false
+
+    tags:
+      - test
+
+# deixando as keys principais corretas, mas errado dentro de routes para teste
