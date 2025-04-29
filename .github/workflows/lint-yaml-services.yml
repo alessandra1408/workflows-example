@@ -30,7 +30,7 @@ jobs:
           echo "MODIFIED: $modified"
           echo "REMOVED: $removed"
 
-          if [ -z "$added" ] && [ -z "$modified" ]; then
+          if [ "$added" = "[]" ] && [ "$modified" = "[]" ]; then
             echo "No added or modified files detected. Exiting."
             exit 0
           fi
