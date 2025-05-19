@@ -2,10 +2,10 @@ _format_version: "3.0"
 _info:
   defaults: {}
   select_tags:
-    - testing
+    - test
 
 services:
-  - name: testing
+  - name: test
     enabled: true
     host: test
     port: 443
@@ -16,7 +16,7 @@ services:
           - test.com
         name: test-route2
         methods:
-          - GET
+          - POST
         paths:
           - /auth/teste2
         protocols:
@@ -24,7 +24,7 @@ services:
         strip_path: false
 
     tags:
-      - testing
+      - test
 
 # deixando as keys principais corretas, mas errado dentro de routes para teste
 
