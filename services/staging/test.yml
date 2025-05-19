@@ -17,10 +17,10 @@ services:
         name: test-route
         methods:
           - POST
+        protocols:
+          - http
         paths:
           - /auth/teste
-        protocols:
-          - https
         strip_path: false
 
     tags:
