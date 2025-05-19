@@ -22,9 +22,8 @@ jobs:
       - name: Get added or modified service files
         id: files
         run: |
-          content=$(jq -r ".[]" "$HOME/files_added.json" "$HOME/files_modified.json" | grep 'services/' | jq -R -s -c 'split("\n")[:-1]')
+          content=$(jq -r ".[]" $HOME/files_added.json $HOME/files_modified.json | grep 'services/' | jq -R -s -c 'split("\n")[:-1]')
           echo "::set-output name=files::$content"
-
     outputs:
       files: ${{ steps.files.outputs.files }}
 
