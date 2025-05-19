@@ -22,27 +22,8 @@ jobs:
       - name: Get added or modified service files
         id: files
         run: |
-          # added="${{ steps.file_changes.outputs.files_added }}"
-          # modified="${{ steps.file_changes.outputs.files_modified }}"
-          # removed="${{ steps.file_changes.outputs.files_removed }}"
-
-          # echo "ADDED: $added"
-          # echo "MODIFIED: $modified"
-          # echo "REMOVED: $removed"
-
-          # if [ "$added" = "[]" ] && [ "$modified" = "[]" ]; then
-          #   echo "No added or modified files detected. Exiting."
-          #   exit 0
-          # else
-          #   echo "Files was found"
-          # fi
-
           content=$(jq -r ".[]" "$HOME/files_added.json" "$HOME/files_modified.json" | grep 'services/' | jq -R -s -c 'split("\n")[:-1]')
           echo "::set-output name=files::$content"
-
-          # content=$(jq -r '.[]' "$HOME/files_added.json" "$HOME/files_modified.json" | grep '^services/' | jq -R -s -c 'split("\n")[:-1]')
-          # echo "::set-output name=files::$content"
-
 
     outputs:
       files: ${{ steps.files.outputs.files }}
