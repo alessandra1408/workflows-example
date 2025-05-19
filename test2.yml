@@ -14,11 +14,11 @@ services:
     routes:
       - hosts:
           - test.com
-        name: test-route
+        name: test-route2
         methods:
           - POST
         paths:
-          - /auth/teste
+          - /auth/teste2
         protocols:
           - https
         strip_path: false
