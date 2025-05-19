@@ -1,0 +1,108 @@
+_format_version: "3.0"
+_info:
+  defaults: {}
+  select_tags:
+    - httpbin
+services:
+  - name: httpbin
+    enabled: true
+    host: "httpbin.org"
+    port: 443
+    tls_verify: false
+    protocol: https
+    routes:
+      - name: httpbin-anything
+        protocols:
+          - http
+        methods:
+          - POST
+        paths:
+          - /anything
+          - /path/to/anything
+        plugins:
+          - name: rate-limiting
+            enabled: false
+            protocols:
+              - http
+            config:
+              fault_tolerant: true
+              header_name: null
+              hide_client_headers: true
+              error_code: 503
+              year: null
+              month: null
+              day: null
+              hour: null
+              minute: 1
+              second: null
+              limit_by: service
+              path: null
+              policy: local
+              redis_database: 0
+              redis_host: null
+              redis_password: null
+              redis_port: 6379
+              redis_server_name: null
+              redis_ssl: false
+              redis_ssl_verify: false
+              redis_timeout: 2000
+              redis_username: null
+
+          - name: payments-auth
+            enabled: false
+            protocols:
+              - http
+            config:
+              providers:
+                - authmodule
+                - server2server
+                - user2server
+              keyRequired: false
+              searchKeyAlsoInBody: false
+              logOnly: true
+              authLib:
+                clientId: ${{ env "DECK_KONG_IDP_CLIENT_ID" }}
+                clientSecret: ${{ env "DECK_KONG_IDP_CLIENT_SECRET" }}
+                tokenUrl: ${{ env "DECK_IDP_TOKEN_URL" }}
+                configUrl: ${{ env "DECK_PAYMENTS_AUTH_CONFIG_URL" }}
+
+          - name: kong-plugin-url-rewrite
+            enabled: true
+            protocols:
+              - http
+            config:
+              url: /anything
+
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              header-keys:
+                - Authorization
+              iss-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2,https://cognito-idp.us-east-1.amazonaws.com/us-east-1_VLfrZbyJr
+              jwk-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2/.well-known/jwks.json,https://cognito-idp.us-east-1.amazonaws.com/us-east-1_VLfrZbyJr/.well-known/jwks.json
+              policy-key: null
+
+          - name: jwt-permission
+            enabled: false
+            protocols:
+              - http
+            config:
+              policy-key: all
+              header-keys:
+                - Authorization
+              jwt-permission:
+                claim-name: scope
+                values:
+                  - tapton_api/partner
+                  - idp_payments_api/mgmt_users
+                  - usr_type/pos
+                policy-values: all
+
+    tags:
+      - httpbin
