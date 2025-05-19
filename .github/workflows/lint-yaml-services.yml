@@ -24,6 +24,8 @@ jobs:
         run: |
           content=$(jq -r ".[]" $HOME/files_added.json $HOME/files_modified.json | grep 'services/' | jq -R -s -c 'split("\n")[:-1]')
           echo "Files changed: $content"
+          echo "Files modified: $HOME/files_modified.json"
+          echo "Files added: $HOME/files_added.json"
           echo "::set-output name=files::$content"
     outputs:
       files: ${{ steps.files.outputs.files }}
