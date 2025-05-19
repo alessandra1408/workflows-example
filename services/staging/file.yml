@@ -5,9 +5,9 @@ _info:
     - test
 
 services:
-  - name: test
+  - name: testeeee
     enabled: true
-    host: test
+    host: testeeee
     port: 443
     tls_verify: false
     protocol: https
