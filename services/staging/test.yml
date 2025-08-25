@@ -20,7 +20,7 @@ services:
           - GET
           - PATCH
         protocols:
-          - https
+          - http
         paths:
           - /auth/teste
         strip_path: false
