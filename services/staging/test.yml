@@ -17,6 +17,8 @@ services:
         name: test-route
         methods:
           - POST
+          - GET
+          - PATCH
         paths:
           - /auth/teste
         protocols:
