@@ -1,0 +1,87 @@
+name: Push configs to Kong API GW on Staging (All Clusters)
+
+permissions:
+  contents: read
+  pull-requests: read
+
+on:
+  push:
+    paths:
+      - "ca-certs/staging/*.yml"
+      - "consumers/staging/*.yml"
+      - "plugins/staging/*.yml"
+      - "services/staging/*.yml"
+    branches:
+      - "main"
+
+jobs:
+  # JOB DE VERIFICAÇÃO ATUALIZADO PARA NÃO DEPENDER DA MENSAGEM DE COMMIT
+  check-pr-approvals:
+    runs-on: ubuntu-latest # Pode usar seu small-runner se preferir
+    outputs:
+      count: ${{ steps.verify_approvals.outputs.approval_count }}
+    
+    steps:
+      - name: '1. Encontrar PR associado ao commit'
+        id: get_pr_number
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          # Este endpoint de API é projetado para encontrar o PR que mergeou um commit.
+          # Ele requer um cabeçalho de 'Accept' específico.
+          API_URL="https://api.github.com/repos/${{ github.repository }}/commits/${COMMIT_SHA}/pulls"
+          
+          # Faz a chamada à API
+          # A resposta é uma lista (array). Geralmente, terá apenas um PR.
+          PR_DATA=$(curl -sf -H "Authorization: Bearer $GITHUB_TOKEN" \
+                           -H "Accept: application/vnd.github.groot-preview+json" \
+                           "$API_URL")
+
+          # Extrai o número do primeiro PR encontrado na lista
+          PR_NUMBER=$(echo "$PR_DATA" | jq '.[0].number')
+
+          # Validação: Se nenhum PR for encontrado, o PR_NUMBER será 'null'
+          if [ "$PR_NUMBER" == "null" ] || [ -z "$PR_NUMBER" ]; then
+            echo "::error::Não foi possível encontrar um Pull Request associado ao commit ${{ github.sha }}."
+            echo "Push diretos para a branch 'main' podem não ser permitidos por esta verificação."
+            exit 1
+          fi
+
+          echo "Commit associado ao PR #${PR_NUMBER}."
+          echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+
+      - name: '2. Verificar 2 ou mais aprovações do time dono'
+        id: verify_approvals
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.get_pr_number.outputs.pr_number }}
+          OWNER_TEAM_SLUG: 'seu-time-dono' # <-- SUBSTITUA AQUI PELO SLUG DO SEU TIME
+        run: |
+          # Este script permanece o mesmo
+          REVIEWS_URL="https://api.github.com/repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews"
+          reviews=$(curl -sf -H "Authorization: Bearer $GITHUB_TOKEN" $REVIEWS_URL)
+          approvers=$(echo "$reviews" | jq -r '.[] | select(.state == "APPROVED") | .user.login' | sort -u)
+          
+          approval_count=0
+          if [ -n "$approvers" ]; then
+            for user in $approvers; do
+              TEAM_MEMBERSHIP_URL="https://api.github.com/orgs/${{ github.repository_owner }}/teams/${OWNER_TEAM_SLUG}/memberships/${user}"
+              http_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GITHUB_TOKEN" $TEAM_MEMBERSHIP_URL)
+              if [ "$http_status" -eq 200 ]; then
+                approval_count=$((approval_count + 1))
+              fi
+            done
+          fi
+          echo "Total de aprovações do time '${OWNER_TEAM_SLUG}': $approval_count"
+          echo "approval_count=${approval_count}" >> $GITHUB_OUTPUT
+
+  # ESTE JOB NÃO MUDA
+  us_east_1:
+    needs: check-pr-approvals
+    if: needs.check-pr-approvals.outputs.count >= 2
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-1
+      region-name: virginia
+      environment: "config-us-east-1-stg"
