@@ -12,19 +12,17 @@ services:
     tls_verify: false
     protocol: https
     routes:
-      - hosts:
+      - name: test-route
+        hosts:
           - test.com
-        name: test-route
         methods:
           - POST
+          - GET
+        protocols:
+          - http
         paths:
           - /auth/teste
-        protocols:
-          - https
         strip_path: false
 
     tags:
       - test
-
-# deixando as keys principais corretas, mas errado dentro de routes para teste
-
