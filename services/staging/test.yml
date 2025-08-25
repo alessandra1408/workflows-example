@@ -12,17 +12,17 @@ services:
     tls_verify: false
     protocol: https
     routes:
-      - hosts:
+      - name: test-route
+        hosts:
           - test.com
-        name: test-route
         methods:
           - POST
           - GET
           - PATCH
-        paths:
-          - /auth/teste
         protocols:
           - https
+        paths:
+          - /auth/teste
         strip_path: false
 
     tags:
