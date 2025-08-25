@@ -27,6 +27,3 @@ services:
 
     tags:
       - test
-
-# deixando as keys principais corretas, mas errado dentro de routes para teste
-
