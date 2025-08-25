@@ -1,8 +1,8 @@
 name: Push configs to Kong API GW on Staging (All Clusters)
 
 permissions:
-  contents: read
-  pull-requests: read
+  contents: write
+  pull-requests: write
 
 on:
   push:
