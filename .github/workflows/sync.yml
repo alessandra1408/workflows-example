@@ -28,7 +28,7 @@ jobs:
       - name: '1. Encontrar PR e Autor'
         id: get_pr_info
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           # (Código robusto para encontrar PR e Autor a partir do commit)
           API_URL="https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/pulls"
@@ -42,7 +42,7 @@ jobs:
       - name: '2. Verificar aprovações do Time API Gateway'
         id: verify_approvals
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           PR_NUMBER: ${{ steps.get_pr_info.outputs.pr_number }}
           API_GATEWAY_TEAM_SLUG: 'time-api-gateway' # <-- AJUSTE O SLUG DO TIME AQUI
         run: |
@@ -54,7 +54,7 @@ jobs:
         if: steps.verify_approvals.outputs.approval_count >= 1
         id: create_env
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           PR_NUMBER: ${{ steps.get_pr_info.outputs.pr_number }}
           PR_AUTHOR: ${{ steps.get_pr_info.outputs.pr_author_login }}
         run: |
@@ -111,7 +111,7 @@ jobs:
     steps:
       - name: 'Deletar Ambiente Dinâmico'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           ENV_NAME: ${{ needs.check-pr-context.outputs.dynamic_environment_name }}
         run: |
           if [ -z "$ENV_NAME" ]; then

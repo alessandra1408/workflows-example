@@ -23,7 +23,7 @@ jobs:
         id: get_commit
         env:
           # O GitHub CLI precisa do token para se autenticar na API
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
           PR_NUMBER: ${{ github.event.inputs.pr_number }}
         run: |
           echo "Buscando o commit de merge para o PR #${PR_NUMBER}..."
@@ -55,7 +55,7 @@ jobs:
       # Atende à Ação 2: Fazer revert do PR
       - name: '3. Reverter PR na branch main (Rollback de código)'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           echo "Criando um Pull Request para reverter o PR #${{ github.event.inputs.pr_number }}."
           gh pr revert ${{ github.event.inputs.pr_number }} --yes --title "Revert automático"
