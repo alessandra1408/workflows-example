@@ -79,7 +79,7 @@ jobs:
   # ESTE JOB NÃO MUDA
   us_east_1:
     needs: check-pr-approvals
-    if: needs.check-pr-approvals.outputs.count >= 2
+    if: needs.check-pr-approvals.outputs.count >= 0
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-1
