@@ -16,7 +16,44 @@ on:
       - "main"
 
 jobs:
-  # Job 1: Verifica o contexto e cria o ambiente dinâmico
+  prepare-deployment:
+    runs-on: small-runner
+    outputs:
+      files: ${{ steps.get_files.outputs.files }}
+      stable_commit_sha: ${{ steps.set_stable_sha.outputs.sha }}
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # Substitua pelo seu método de autenticação AWS
+          role-to-assume: arn:aws:iam::ACCOUNT-ID:role/GitHubActionsRole 
+          aws-region: us-east-1 # Região do seu SSM
+
+      - name: 'Get changed files'
+        id: get_files
+        run: |
+          # Usamos git diff para encontrar os arquivos alterados no último commit
+          content=$(git diff --name-only HEAD~1 HEAD | grep -E 'ca-certs/production|consumers/production|plugins/production|services/production' | grep -v '.etlua' | jq -R -s -c 'split("\n")[:-1]')
+          echo "Arquivos para deploy: ${content}"
+          echo "files=${content}" >> $GITHUB_OUTPUT
+      
+      - name: 'Set stable commit sha on SSM Parameter Store'
+        id: set_stable_sha
+        run: |
+          STABLE_SHA=$(git rev-parse HEAD~1)
+          echo "Commit estável para rollback: $STABLE_SHA"
+          echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
+          aws ssm put-parameter \
+            --name "/kong/prd/stable_commit_sha" \
+            --type "String" \
+            --value "$STABLE_SHA" \
+            --overwrite
+
   check-pr-context:
     runs-on: ubuntu-latest
     outputs:
@@ -30,7 +67,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          # (Código robusto para encontrar PR e Autor a partir do commit)
           API_URL="https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/pulls"
           PR_DATA=$(curl -sf -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github.groot-preview+json" "$API_URL")
           PR_NUMBER=$(echo "$PR_DATA" | jq '.[0].number')
@@ -39,16 +75,66 @@ jobs:
           echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
           echo "pr_author_login=${PR_AUTHOR_LOGIN}" >> $GITHUB_OUTPUT
 
-      - name: '2. Verificar aprovações do Time API Gateway'
+      - name: '2. Verificar aprovações (VERSÃO DE TESTE PESSOAL)'
         id: verify_approvals
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.get_pr_info.outputs.pr_number }}
-          API_GATEWAY_TEAM_SLUG: 'time-api-gateway' # <-- AJUSTE O SLUG DO TIME AQUI
         run: |
-          # (Script para contar aprovações do time, idêntico ao anterior)
-          # ...
-          echo "approval_count=2" >> $GITHUB_OUTPUT # Simulando 2 aprovações para teste
+          echo "Verificando aprovações TOTAIS (modo de teste) para o PR #${PR_NUMBER}..."
+
+          # 1. Busca todas as revisões do PR
+          REVIEWS_URL="https://api.github.com/repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews"
+          reviews=$(curl -sf -H "Authorization: Bearer $GITHUB_TOKEN" "$REVIEWS_URL")
+          
+          # 2. Filtra para obter uma lista única de quem aprovou
+          approvers=$(echo "$reviews" | jq -r '.[] | select(.state == "APPROVED") | .user.login' | sort -u)
+
+          # Inicia o contador
+          approval_count=0
+
+          # 3. CONTAGEM SIMPLIFICADA: Conta quantas pessoas aprovaram, sem checar time.
+          if [ -n "$approvers" ]; then
+            echo "Aprovadores encontrados: $approvers"
+            # O comando 'wc -l' conta o número de linhas na variável 'approvers'
+            approval_count=$(echo "$approvers" | wc -l)
+          else
+            echo "Nenhuma aprovação encontrada para o PR #${PR_NUMBER}."
+          fi
+
+          # 4. Define o output para os próximos jobs
+          echo "Total de aprovações (qualquer pessoa): $approval_count"
+          echo "approval_count=${approval_count}" >> $GITHUB_OUTPUT
+
+      # - name: '2. Verificar aprovações do Time API Gateway'
+      #   id: verify_approvals
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      #     PR_NUMBER: ${{ steps.get_pr_info.outputs.pr_number }}
+      #     API_GATEWAY_TEAM_SLUG: 'payments-core-api-gtw'
+      #   run: |
+      #     echo "Verificando aprovações do time '${API_GATEWAY_TEAM_SLUG}' para o PR #${PR_NUMBER}..."
+      #     REVIEWS_URL="https://api.github.com/repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews"
+      #     reviews=$(curl -sf -H "Authorization: Bearer $GITHUB_TOKEN" "$REVIEWS_URL")
+      #     approvers=$(echo "$reviews" | jq -r '.[] | select(.state == "APPROVED") | .user.login' | sort -u)
+      #     approval_count=0
+      #     if [ -n "$approvers" ]; then
+      #       echo "Aprovadores encontrados: $approvers"
+      #       for user in $approvers; do
+      #         TEAM_MEMBERSHIP_URL="https://api.github.com/orgs/${{ github.repository_owner }}/teams/${API_GATEWAY_TEAM_SLUG}/memberships/${user}"
+      #         http_status=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GITHUB_TOKEN" "$TEAM_MEMBERSHIP_URL")
+      #         if [ "$http_status" -eq 200 ]; then
+      #           echo "✔️ O usuário '$user' pertence ao time."
+      #           approval_count=$((approval_count + 1))
+      #         else
+      #           echo "❌ O usuário '$user' NÃO pertence ao time."
+      #         fi
+      #       done
+      #     else
+      #       echo "Nenhuma aprovação encontrada."
+      #     fi
+      #     echo "Total de aprovações do time '${API_GATEWAY_TEAM_SLUG}': $approval_count"
+      #     echo "approval_count=${approval_count}" >> $GITHUB_OUTPUT
 
       - name: '3. Criar Ambiente Dinâmico (se aplicável)'
         if: steps.verify_approvals.outputs.approval_count >= 1
@@ -120,3 +206,14 @@ jobs:
           fi
           echo "Limpando e deletando o ambiente: ${ENV_NAME}"
           gh api --method DELETE "repos/${{ github.repository }}/environments/${ENV_NAME}"
+
+  # rollback-environment:
+  #   runs-on: ubuntu-latest
+  #   environment: (${{ needs.check-pr-context.outputs.dynamic_environment_name }} OR tech-approve)
+  #   steps:
+  #     - name: 'Reverter alterações no ambiente'
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+  #       run: |
+  #         echo "Revertendo alterações no ambiente: ${ENV_NAME}"
+  #         # Adicione aqui o comando para reverter as alterações no ambiente
