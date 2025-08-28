@@ -74,10 +74,10 @@ jobs:
         run: |
           # Regra de teste: Se 2+ aprovações, o autor do PR aprova. Senão, o dono do repo.
           if (( $APPROVAL_COUNT >= 2 )); then
-            echo "(< 2 aprovações) Aprovador será o autor do PR: ${PR_AUTHOR}"
+            echo "(> 2 aprovações) Aprovador será o autor do PR: ${PR_AUTHOR}"
             APPROVER_LOGIN=$PR_AUTHOR
           else
-            echo "Aprovador será o dono do repositório: ${REPO_OWNER}"
+            echo "(< 2 aprovações)Aprovador será o dono do repositório: ${REPO_OWNER}"
             APPROVER_LOGIN=$REPO_OWNER
           fi
           
