@@ -9,13 +9,6 @@ on:
         required: true
 
 jobs:
-  static_check:
-    runs-on: small-runner-on-demand
-    steps:
-      - name: Checkout
-        id: checkout
-        uses: actions/checkout@v3
-        
   apply:
     runs-on: ubuntu-latest
     steps:
