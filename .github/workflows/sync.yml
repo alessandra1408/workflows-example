@@ -100,7 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     # Roda se QUALQUER job anterior falhou ou foi cancelado (rejeitado)
     if: failure() || cancelled()
-    needs: [setup-environment-and-context, deploy-cluster-1, deploy-cluster-2]
+    needs: [setup-environment-and-context]
     # MUDANÇA PRINCIPAL: Este job agora é um portão de aprovação!
     environment: ${{ needs.setup-environment-and-context.outputs.env_name }} && tech-approve
     steps:
