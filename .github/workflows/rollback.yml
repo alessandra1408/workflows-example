@@ -1,61 +1,24 @@
-name: Rollback Staging Environment
+# Arquivo: .github/workflows/rollback-logic.yml
 
+name: (Reusable Test) Rollback Logic
 on:
-  workflow_dispatch: # Permite acionamento manual pela interface do GitHub
+  workflow_call:
     inputs:
-      pr_number:
-        description: 'Número do PR que precisa ser revertido'
+      stable_commit_sha:
+        type: string
+        required: true
+      pr_number_to_revert:
+        type: string
         required: true
 
 jobs:
-  rollback:
-    runs-on: small-runner-on-demand
-    # A aprovação do rollback será feita pelo Time API Gateway no ambiente 'tech-approve'
-    # Esta é a implementação mais segura da regra "OU Time Solicitante OU Time API Gateway"
-    environment: tech-approve 
-    
-    permissions:
-      contents: write
-      pull-requests: write
-
+  execute:
+    runs-on: ubuntu-latest
     steps:
-      - name: '1. Obter SHA do commit de merge do PR'
-        id: get_commit
-        env:
-          # O GitHub CLI precisa do token para se autenticar na API
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          PR_NUMBER: ${{ github.event.inputs.pr_number }}
+      - name: Simulate Rollback
         run: |
-          echo "Buscando o commit de merge para o PR #${PR_NUMBER}..."
-          
-          # Usa o GitHub CLI para visualizar o PR, requisitando apenas o campo 'mergeCommit' em formato JSON.
-          # Em seguida, o utilitário 'jq' é usado para extrair o OID (o SHA) de dentro do objeto JSON.
-          COMMIT_SHA=$(gh pr view ${PR_NUMBER} --json mergeCommit --jq '.mergeCommit.oid')
-          
-          # Validação: Se o PR não foi mergeado, o campo será nulo e o comando retornará 'null' ou uma string vazia.
-          if [ -z "$COMMIT_SHA" ] || [ "$COMMIT_SHA" == "null" ]; then
-            echo "::error::Não foi possível encontrar o commit de merge para o PR #${PR_NUMBER}. Verifique se o PR foi realmente mergeado."
-            exit 1
-          fi
-          
-          echo "Commit de merge encontrado: ${COMMIT_SHA}"
-          
-          # Define a variável 'commit_sha' como um output deste passo, para ser usada nos próximos.
-          echo "commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
-
-      # Atende à Ação 1: Aplicar estado anterior
-      - name: '2. Aplicar estado anterior (Rollback de configuração)'
-        run: |
-          echo "Fazendo checkout no commit ANTERIOR ao merge..."
-          git checkout "${{ steps.get_commit.outputs.commit_sha }}~1"
-
-          echo "Executando apply para todos os 3 clusters com o estado anterior..."
-          # COLOQUE AQUI SEU COMANDO DE APPLY (ex: deck sync)
-
-      # Atende à Ação 2: Fazer revert do PR
-      - name: '3. Reverter PR na branch main (Rollback de código)'
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          echo "Criando um Pull Request para reverter o PR #${{ github.event.inputs.pr_number }}."
-          gh pr revert ${{ github.event.inputs.pr_number }} --yes --title "Revert automático"
+          echo "🚨 INICIANDO SIMULAÇÃO DE ROLLBACK..."
+          echo "1. Faria checkout no commit estável: ${{ inputs.stable_commit_sha }}"
+          echo "2. Aplicaria a configuração antiga nos 3 clusters."
+          echo "3. Criaria um PR para reverter o PR #${{ inputs.pr_number_to_revert }}"
+          echo "✅ Simulação de Rollback concluída."

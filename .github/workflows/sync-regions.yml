@@ -1,54 +1,18 @@
-name: Push configs to Kong API GW Staging
+# Arquivo: .github/workflows/sync-regions.yml
 
-permissions:
-  contents: read
-  pull-requests: write
-
+name: (Reusable Test) Sync Region
 on:
   workflow_call:
     inputs:
-      region:
+      region_name:
         type: string
-        description: "Region"
-        required: true
-      region-name:
-        type: string
-        description: "The name of region"
-        required: true
-      environment:
-        type: string
-        description: "The name of environment"
         required: true
 
 jobs:
-  start_job:
-    runs-on: small-runner
-    steps:
-      - name: Show who started the job
-        run: |
-          echo "Iniciando o apply na região de Virginia.
-          Este job foi iniciado por: $GITHUB_ACTOR"
-
-  filesChanged:
-    runs-on: small-runner
-    needs: [start_job]
-    steps:
-      - id: file_changes
-        uses: trilom/file-changes-action@1.2.4
-
-      - name: Get files
-        id: files
-        run: |
-          content=$(jq ".[]" $HOME/files.json | grep -E 'ca-certs/staging|consumers/staging|plugins/staging|services/staging' | grep -v '.etlua' | jq -R -s -c 'split("\n")[:-1]')
-          echo "::set-output name=files::$content"
-    outputs:
-      files: ${{ steps.files.outputs.files }}
-
   apply:
-    runs-on: small-runner-on-demand
-    needs: [filesChanged]
-    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
     steps:
-        - name: Display started job
-          run: |
-            echo "step de apply"
+      - name: Simulate Apply
+        run: |
+          echo "✅ Simulando apply no cluster: ${{ inputs.region_name }}"
+          sleep 5

@@ -1,0 +1,6 @@
+sync:
+    orquestra tudo
+    chama o sync-regios
+    tem os jobs de cada region
+    tem como job primario a coleta do commit anterior
+    tem o job de rollback, que chama a pipe de rollback
