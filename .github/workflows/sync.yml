@@ -184,10 +184,14 @@ jobs:
 
   # ---- CAMINHO DE ROLLBACK (só roda se o portão for REJEITADO) ----
   trigger-rollback:
-    needs: [prepare-context, deployment-gate]
+    runs-on: ubuntu-latest
+    needs: [prepare-context, deployment-gate, setup-dynamic-environment]
     if: needs.deployment-gate.result == 'cancelled'
+    environment: ${{ needs.setup-dynamic-environment.outputs.env_name }} && tech-approve
     # CORREÇÃO AQUI: 'uses' no nível do job
-    uses: ./.github/workflows/rollback.yml
-    with:
-      stable_commit_sha: ${{ needs.prepare-context.outputs.stable_commit_sha }}
-      pr_number_to_revert: ${{ needs.prepare-context.outputs.pr_number }}
+    steps:
+      - name: Rollback Changes
+        uses: ./.github/workflows/rollback.yml
+        with:
+          stable_commit_sha: ${{ needs.prepare-context.outputs.stable_commit_sha }}
+          pr_number_to_revert: ${{ needs.prepare-context.outputs.pr_number }}
