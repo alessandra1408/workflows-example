@@ -13,114 +13,68 @@ on:
 
 jobs:
   # Job 1: Prepara todo o contexto (arquivos, aprovações, estado estável)
-  prepare-context:
+  setup-environment-and-context:
     runs-on: ubuntu-latest
     outputs:
       pr_number: ${{ steps.get_pr_info.outputs.pr_number }}
-      pr_author_login: ${{ steps.get_pr_info.outputs.pr_author_login }}
-      approval_count: ${{ steps.verify_approvals.outputs.approval_count }}
       stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}
+      env_name: ${{ steps.create_env.outputs.env_name }}
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
-        with: { fetch-depth: 2 } # Pega o commit atual e seu pai
+        with: { fetch-depth: 2 }
 
-      - name: '1. Get PR Info from Commit'
+      - name: '1. Get PR Info'
         id: get_pr_info
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           PR_DATA=$(gh pr list --search "${{ github.sha }}" --state merged --json number,author)
-          PR_NUMBER=$(echo "$PR_DATA" | jq '.[0].number')
-          PR_AUTHOR_LOGIN=$(echo "$PR_DATA" | jq -r '.[0].author.login')
-          if [ "$PR_NUMBER" == "null" ]; then echo "::error::PR não encontrado." && exit 1; fi
-          echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
-          echo "pr_author_login=${PR_AUTHOR_LOGIN}" >> $GITHUB_OUTPUT
+          echo "pr_number=$(echo "$PR_DATA" | jq '.[0].number')" >> $GITHUB_OUTPUT
+          echo "pr_author_login=$(echo "$PR_DATA" | jq -r '.[0].author.login')" >> $GITHUB_OUTPUT
 
-      - name: '2. Verify PR Approvals (Test Mode)'
-        id: verify_approvals
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          PR_NUMBER: ${{ steps.get_pr_info.outputs.pr_number }}
+      - name: '2. Verify PR Approvals & Determine Approver'
+        id: determine_approver
+        env: 
+           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          # Versão simplificada para teste pessoal: apenas conta as aprovações.
-          REVIEWS=$(gh pr view ${PR_NUMBER} --json reviews --jq '.reviews.[] | select(.state == "APPROVED") | .author.login')
+          REVIEWS=$(gh pr view ${{ steps.get_pr_info.outputs.pr_number }} --json reviews --jq '.reviews.[] | select(.state == "APPROVED") | .author.login')
           APPROVAL_COUNT=$(echo "${REVIEWS}" | sort -u | wc -l)
-          echo "Total de aprovações únicas: ${APPROVAL_COUNT}"
-          echo "approval_count=${APPROVAL_COUNT}" >> $GITHUB_OUTPUT
+          
+          if (( $APPROVAL_COUNT >= 2 )); then
+            APPROVER_LOGIN=${{ steps.get_pr_info.outputs.pr_author_login }}
+          else
+            APPROVER_LOGIN=${{ github.repository_owner }}
+          fi
+          echo "Aprovador definido: ${APPROVER_LOGIN}"
+          echo "approver=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
 
       - name: '3. Get Stable Commit SHA'
         id: get_stable_sha
         run: |
-          # O estado estável é o commit pai do commit de merge
           STABLE_SHA=$(git rev-parse HEAD~1)
-          echo "Commit estável para rollback: $STABLE_SHA"
           echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
 
-  # Job 2: O Portão de Decisão que pausa a pipeline
-  deployment-gate:
-    runs-on: ubuntu-latest
-    needs: prepare-context
-    environment:
-      name: decision-pr-${{ needs.prepare-context.outputs.pr_number }}
-    steps:
-      - name: 'Setup Decision Gate & Await Approval'
+      - name: '4. Create/Setup Dynamic Environment'
+        id: create_env
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          ENV_NAME: "decision-pr-${{ needs.prepare-context.outputs.pr_number }}"
-          APPROVAL_COUNT: ${{ needs.prepare-context.outputs.approval_count }}
-          PR_AUTHOR: ${{ needs.prepare-context.outputs.pr_author_login }}
-          REPO_OWNER: ${{ github.repository_owner }}
-        run: |
-          # Regra de teste: Se 2+ aprovações, o autor do PR aprova. Senão, o dono do repo.
-          if (( $APPROVAL_COUNT >= 2 )); then
-            echo "(> 2 aprovações) Aprovador será o autor do PR: ${PR_AUTHOR}"
-            APPROVER_LOGIN=$PR_AUTHOR
-          else
-            echo "(< 2 aprovações)Aprovador será o dono do repositório: ${REPO_OWNER}"
-            APPROVER_LOGIN=$REPO_OWNER
-          fi
-          
-          USER_ID=$(gh api "users/${APPROVER_LOGIN}" | jq '.id')
-          REVIEWERS_JSON="{ \"reviewers\": [ { \"type\": \"User\", \"id\": ${USER_ID} } ] }"
-          
-          # Cria o ambiente dinâmico com o aprovador correto
-          gh api --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" --input - <<< "${REVIEWERS_JSON}"
-          echo "Aguardando decisão... Para DEPLOY, clique 'Approve'. Para ROLLBACK, clique 'Reject'."
-
-  # ---- CAMINHO DE DEPLOY (só roda se o portão for APROVADO) ----
-  setup-dynamic-environment:
-    runs-on: ubuntu-latest
-    needs: prepare-context
-    outputs:
-      # MUDANÇA: Definimos um output para o nome do ambiente
-      env_name: ${{ steps.create_env.outputs.env_name }}
-    steps:
-      - name: 'Setup Dynamic Environment for All Clusters'
-        id: create_env # Damos um id ao step para referenciar seu output
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          PR_NUMBER: ${{ needs.prepare-context.outputs.pr_number }}
-          PR_AUTHOR: ${{ needs.prepare-context.outputs.pr_author_login }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          APPROVER: ${{ steps.determine_approver.outputs.approver }}
+          PR_NUMBER: ${{ steps.get_pr_info.outputs.pr_number }}
         run: |
           ENV_NAME="deploy-pr-${PR_NUMBER}"
-          echo "Configuring environment ${ENV_NAME} for approver ${PR_AUTHOR}"
-
-          # MUDANÇA: Gera o output para o job
           echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
-          
-          USER_ID=$(gh api "users/${PR_AUTHOR}" | jq '.id')
+          USER_ID=$(gh api "users/${APPROVER}" | jq '.id')
           REVIEWERS_JSON="{ \"reviewers\": [ { \"type\": \"User\", \"id\": ${USER_ID} } ] }"
           gh api --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" --input - <<< "${REVIEWERS_JSON}"
 
+  # Job 2: O Portão de Decisão que pausa a pipeline
   deploy-cluster-1:
     runs-on: ubuntu-latest
-    # MUDANÇA: Agora precisa do output do setup
-    needs: [prepare-context, setup-dynamic-environment]
-    # MUDANÇA: Usa o output para definir o ambiente
-    environment: ${{ needs.setup-dynamic-environment.outputs.env_name }}
+    needs: setup-environment-and-context
+    environment: ${{ needs.setup-environment-and-context.outputs.env_name }}
     steps:
-      - name: Deploy Cluster 1
+      - name: 'Sync Regions'
         uses: ./.github/workflows/sync-regions.yml
         with:
           region_name: "Cluster 1 (Virginia)"
@@ -133,65 +87,42 @@ jobs:
 
   deploy-cluster-2:
     runs-on: ubuntu-latest
-    # MUDANÇA: Agora precisa do output do setup
-    needs: [prepare-context, setup-dynamic-environment, wait-1]
-    # MUDANÇA: Usa o output para definir o ambiente
-    environment: ${{ needs.setup-dynamic-environment.outputs.env_name }}
+    needs: [setup-environment-and-context, wait-1]
+    environment: ${{ needs.setup-environment-and-context.outputs.env_name }}
     steps:
-      - name: Deploy Cluster 2
+      - name: 'Sync Regions'
         uses: ./.github/workflows/sync-regions.yml
         with:
           region_name: "Cluster 2 (Ohio)"
 
-  wait-2:
+  # ---- JOB DE ROLLBACK CONDICIONAL ----
+  trigger-rollback:
     runs-on: ubuntu-latest
-    needs: deploy-cluster-2
+    # Roda se QUALQUER job anterior falhou ou foi cancelado (rejeitado)
+    if: failure() || cancelled()
+    needs: [setup-environment-and-context, deploy-cluster-1, deploy-cluster-2]
+    # MUDANÇA PRINCIPAL: Este job agora é um portão de aprovação!
+    environment: ${{ needs.setup-environment-and-context.outputs.env_name }} && tech-approve
     steps:
-      - run: sleep 10
-      
-  deploy-cluster-3:
-    runs-on: ubuntu-latest
-    # MUDANÇA: Agora precisa do output do setup
-    needs: [prepare-context, setup-dynamic-environment, wait-2]
-    # MUDANÇA: Usa o output para definir o ambiente
-    environment: ${{ needs.setup-dynamic-environment.outputs.env_name }}
-    steps:
-      - name: Deploy Cluster 3
-        uses: ./.github/workflows/sync-regions.yml
+      - name: 'Rollback Approved, Calling Rollback Logic'
+        run: echo "Aprovação de Rollback recebida. Executando a reversão..."
+      - uses: ./.github/workflows/rollback.yml
         with:
-          region_name: "Cluster 3 (California)"
+          stable_commit_sha: ${{ needs.setup-environment-and-context.outputs.stable_commit_sha }}
+          pr_number_to_revert: ${{ needs.setup-environment-and-context.outputs.pr_number }}
 
-  # Job Final: Apaga o ambiente dinâmico
-  cleanup-dynamic-environment:
+
+  # Job Final: Limpeza do ambiente dinâmico
+  cleanup-environment:
     runs-on: ubuntu-latest
+    # Roda sempre, independente do resultado final da pipeline
     if: always()
-    # MUDANÇA: Agora precisa do output do setup
-    needs: [setup-dynamic-environment, deploy-cluster-3]
+    needs: [setup-environment-and-context, deploy-cluster-2, trigger-rollback]
     steps:
       - name: 'Delete Dynamic Environment'
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          # MUDANÇA: Usa o output para saber qual ambiente deletar
-          ENV_NAME: ${{ needs.setup-dynamic-environment.outputs.env_name }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          ENV_NAME: ${{ needs.setup-environment-and-context.outputs.env_name }}
         run: |
-          # Adicionamos uma verificação para garantir que o nome não está vazio
-          if [ -z "$ENV_NAME" ]; then
-            echo "Nome do ambiente não encontrado, pulando a limpeza."
-            exit 0
-          fi
-          echo "Cleaning up environment: ${ENV_NAME}"
+          echo "Limpando o ambiente: ${ENV_NAME}"
           gh api --method DELETE "repos/${{ github.repository }}/environments/${ENV_NAME}"
-
-  # ---- CAMINHO DE ROLLBACK (só roda se o portão for REJEITADO) ----
-  trigger-rollback:
-    runs-on: ubuntu-latest
-    needs: [prepare-context, deployment-gate, setup-dynamic-environment]
-    if: needs.deployment-gate.result == 'cancelled'
-    environment: ${{ needs.setup-dynamic-environment.outputs.env_name }} && tech-approve
-    # CORREÇÃO AQUI: 'uses' no nível do job
-    steps:
-      - name: Rollback Changes
-        uses: ./.github/workflows/rollback.yml
-        with:
-          stable_commit_sha: ${{ needs.prepare-context.outputs.stable_commit_sha }}
-          pr_number_to_revert: ${{ needs.prepare-context.outputs.pr_number }}
