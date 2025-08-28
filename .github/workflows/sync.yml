@@ -99,7 +99,7 @@ jobs:
       - name: 'Setup Dynamic Environment for All Clusters'
         id: create_env # Damos um id ao step para referenciar seu output
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           PR_NUMBER: ${{ needs.prepare-context.outputs.pr_number }}
           PR_AUTHOR: ${{ needs.prepare-context.outputs.pr_author_login }}
         run: |
@@ -170,7 +170,7 @@ jobs:
     steps:
       - name: 'Delete Dynamic Environment'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           # MUDANÇA: Usa o output para saber qual ambiente deletar
           ENV_NAME: ${{ needs.setup-dynamic-environment.outputs.env_name }}
         run: |
