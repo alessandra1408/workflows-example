@@ -20,6 +20,7 @@ on:
 jobs:
   apply-stable-state:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment_name }}
     strategy:
       fail-fast: false
       matrix:
