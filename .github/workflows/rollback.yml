@@ -41,15 +41,6 @@ jobs:
       - name: '2. Deck Sync Rollback para cada cluster'
         run: |
           echo "Revertendo o arquivo ${{ matrix.file }} para o estado do commit ${{ inputs.stable_commit_sha }}"
-          
-          # Cluster 1
-          deck gateway sync ${{ matrix.file }} --tls-skip-verify --kong-addr ${{ secrets.KONG_ADMIN_ENDPOINT_C1 }} --headers ${{ secrets.DECK_HEADERS_C1 }}
-          
-          # Cluster 2
-          deck gateway sync ${{ matrix.file }} --tls-skip-verify --kong-addr ${{ secrets.KONG_ADMIN_ENDPOINT_C2 }} --headers ${{ secrets.DECK_HEADERS_C2 }}
-
-          # Cluster 3
-          deck gateway sync ${{ matrix.file }} --tls-skip-verify --kong-addr ${{ secrets.KONG_ADMIN_ENDPOINT_C3 }} --headers ${{ secrets.DECK_HEADERS_C3 }}
 
   # Job para criar o PR de reversão do código
   create-revert-pr:

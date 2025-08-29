@@ -141,6 +141,7 @@ jobs:
       pr_number_to_revert: ${{ needs.setup-environment-and-context.outputs.pr_number }}
       environment_name: ${{ needs.setup-environment-and-context.outputs.env_name }}
       files_to_revert: ${{ needs.setup-environment-and-context.outputs.files_changed }}
+    secrets: inherit
 
   # Job Final: Limpeza do ambiente dinâmico
   cleanup-environment:
