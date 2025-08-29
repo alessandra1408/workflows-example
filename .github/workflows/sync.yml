@@ -55,18 +55,58 @@ jobs:
           STABLE_SHA=$(git rev-parse HEAD~1)
           echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
 
-      - name: '4. Create/Setup Dynamic Environment'
+      - name: '4. Create/Setup Dynamic Environment with Combined Approvers'
         id: create_env
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           APPROVER: ${{ steps.determine_approver.outputs.approver }}
           PR_NUMBER: ${{ steps.get_pr_info.outputs.pr_number }}
         run: |
+          set -e # Encerra o script se qualquer comando falhar
+
+          # --- 1. Define o nome do ambiente dinâmico ---
           ENV_NAME="apply-pr-${PR_NUMBER}"
+          echo "Criando ambiente dinâmico: ${ENV_NAME}"
           echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
+
+          # --- 2. Busca os aprovadores do ambiente 'tech-approve' ---
+          echo "Buscando aprovadores do ambiente 'tech-approve'..."
+          # Usamos 'jq' para extrair apenas a lista de 'reviewers' da regra de proteção
+          # O '|| true' evita que o script falhe se 'tech-approve' não existir ou não tiver aprovadores
+          TECH_APPROVE_REVIEWERS=$(gh api "repos/${{ github.repository }}/environments/tech-approve" | \
+            jq '.protection_rules[] | select(.type == "required_reviewers") | .reviewers' || true)
+          
+          # Se não houver aprovadores em tech-approve, inicializa como uma lista vazia
+          if [[ -z "$TECH_APPROVE_REVIEWERS" ]]; then
+            TECH_APPROVE_REVIEWERS="[]"
+            echo "Nenhum aprovador encontrado em 'tech-approve' ou ambiente não configurado. Começando com lista vazia."
+          else
+            echo "Aprovadores de 'tech-approve' encontrados."
+          fi
+
+          # --- 3. Prepara o objeto do aprovador do PR ---
+          echo "Buscando ID do autor do PR: ${APPROVER}"
           USER_ID=$(gh api "users/${APPROVER}" | jq '.id')
-          REVIEWERS_JSON="{ \"reviewers\": [ { \"type\": \"User\", \"id\": ${USER_ID} } ] }"
-          gh api --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" --input - <<< "${REVIEWERS_JSON}"
+          # Cria um objeto JSON para o autor do PR
+          PR_AUTHOR_REVIEWER=$(jq -n --argjson id "$USER_ID" '{type: "User", id: $id}')
+          
+          # --- 4. Combina as listas de aprovadores e remove duplicatas ---
+          echo "Combinando aprovadores e removendo duplicatas..."
+          # Adiciona o autor do PR à lista e usa 'unique_by(.id)' para garantir que não haja duplicatas
+          COMBINED_REVIEWERS=$(echo "$TECH_APPROVE_REVIEWERS" | jq ". + [$PR_AUTHOR_REVIEWER] | unique_by(.id)")
+
+          # --- 5. Cria o payload final e atualiza o ambiente ---
+          # O payload final deve ter a estrutura { "reviewers": [...] }
+          FINAL_PAYLOAD=$(jq -n --argjson reviewers "$COMBINED_REVIEWERS" '{reviewers: $reviewers}')
+
+          echo "Configurando ambiente '${ENV_NAME}' com a seguinte lista de aprovadores:"
+          echo "$FINAL_PAYLOAD" | jq .
+
+          gh api \
+            --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" \
+            --input - <<< "${FINAL_PAYLOAD}"
+          
+          echo "Ambiente '${ENV_NAME}' criado/atualizado com sucesso."
 
   # Job 2: O Portão de Decisão que pausa a pipeline
   deploy-cluster-1:
@@ -91,7 +131,7 @@ jobs:
 
   # ---- JOB DE ROLLBACK CONDICIONAL ----
   trigger-rollback:
-    needs: [setup-environment-and-context]
+    needs: [setup-environment-and-context, deploy-cluster-1]
     uses: ./.github/workflows/rollback.yml
     with:
       stable_commit_sha: ${{ needs.setup-environment-and-context.outputs.stable_commit_sha }}
@@ -105,7 +145,7 @@ jobs:
     # Roda sempre, independente do resultado final da pipeline
     if: always()
     needs: [setup-environment-and-context, deploy-cluster-1]
-    environment: ${{ needs.setup-environment-and-context.outputs.env_name }} && tech-approve
+    environment: ${{ needs.setup-environment-and-context.outputs.env_name }}
     steps:
       - name: 'Delete Dynamic Environment'
         env:
