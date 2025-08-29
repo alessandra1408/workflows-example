@@ -13,16 +13,56 @@ on:
       environment_name:
         type: string
         required: true
+      files_to_revert:
+        type: string
+        required: true
 
 jobs:
-  execute:
+  apply-stable-state:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment_name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        file: ${{ fromJson(inputs.files_to_revert) }}
     steps:
-      - name: Simulate Rollback
+      - name: '1. Checkout do código na VERSÃO ESTÁVEL'
+        uses: actions/checkout@v4
+        with:
+          # AQUI ESTÁ A MÁGICA:
+          # Ele usa o SHA que foi passado como input para voltar o código no tempo.
+          ref: ${{ inputs.stable_commit_sha }}
+
+      - name: Setup Deck
+        uses: kong/setup-deck@v1
+        with:
+          deck-version: 1.47.1
+
+      - name: '2. Deck Sync Rollback para cada cluster'
         run: |
-          echo "🚨 INICIANDO SIMULAÇÃO DE ROLLBACK..."
-          echo "1. Faria checkout no commit estável: ${{ inputs.stable_commit_sha }}"
-          echo "2. Aplicaria a configuração antiga nos 3 clusters."
-          echo "3. Criaria um PR para reverter o PR #${{ inputs.pr_number_to_revert }}"
-          echo "✅ Simulação de Rollback concluída."
+          echo "Revertendo o arquivo ${{ matrix.file }} para o estado do commit ${{ inputs.stable_commit_sha }}"
+          
+          # Cluster 1
+          deck gateway sync ${{ matrix.file }} --tls-skip-verify --kong-addr ${{ secrets.KONG_ADMIN_ENDPOINT_C1 }} --headers ${{ secrets.DECK_HEADERS_C1 }}
+          
+          # Cluster 2
+          deck gateway sync ${{ matrix.file }} --tls-skip-verify --kong-addr ${{ secrets.KONG_ADMIN_ENDPOINT_C2 }} --headers ${{ secrets.DECK_HEADERS_C2 }}
+
+          # Cluster 3
+          deck gateway sync ${{ matrix.file }} --tls-skip-verify --kong-addr ${{ secrets.KONG_ADMIN_ENDPOINT_C3 }} --headers ${{ secrets.DECK_HEADERS_C3 }}
+
+  # Job para criar o PR de reversão do código
+  create-revert-pr:
+    runs-on: ubuntu-latest
+    needs: apply-stable-state
+    if: success()
+    steps:
+      - name: 'Checkout da branch principal para criar o PR'
+        uses: actions/checkout@v4
+        with:
+          ref: 'main'
+      - name: 'Criar PR para reverter o código'
+        env:
+          # Para este passo, o GH_TOKEN precisa ser o seu secret customizado se o padrão não tiver permissão
+          GH_TOKEN: ${{ secrets.GH_TOKEN }} 
+        run: |
+          gh pr revert ${{ inputs.pr_number_to_revert }} --yes --body "Rollback automático executado pela pipeline."

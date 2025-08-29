@@ -19,10 +19,19 @@ jobs:
       pr_number: ${{ steps.get_pr_info.outputs.pr_number }}
       stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}
       env_name: ${{ steps.create_env.outputs.env_name }}
+      files_changed: ${{ steps.get_files.outputs.files }}
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
         with: { fetch-depth: 2 }
+
+      - name: 'Get changed files'
+        id: get_files
+        run: |
+          # Usamos git diff para encontrar os arquivos alterados no último commit
+          content=$(git diff --name-only HEAD~1 HEAD | grep -E 'ca-certs/staging|...' | jq -R -s -c 'split("\n")[:-1]')
+          echo "files=${content}" >> $GITHUB_OUTPUT
+
 
       - name: '1. Get PR Info'
         id: get_pr_info
@@ -103,7 +112,6 @@ jobs:
           
           echo "Ambiente '${ENV_NAME}' criado/atualizado com sucesso."
 
-  # Job 2: O Portão de Decisão que pausa a pipeline
   deploy-cluster-1:
     needs: setup-environment-and-context
     uses: ./.github/workflows/sync-regions.yml
@@ -132,7 +140,7 @@ jobs:
       stable_commit_sha: ${{ needs.setup-environment-and-context.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup-environment-and-context.outputs.pr_number }}
       environment_name: ${{ needs.setup-environment-and-context.outputs.env_name }}
-
+      files_to_revert: ${{ needs.setup-environment-and-context.outputs.files_changed }}
 
   # Job Final: Limpeza do ambiente dinâmico
   cleanup-environment:
