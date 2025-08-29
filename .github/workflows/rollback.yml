@@ -10,10 +10,14 @@ on:
       pr_number_to_revert:
         type: string
         required: true
+      environment_name:
+        type: string
+        required: true
 
 jobs:
   execute:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment_name }}
     steps:
       - name: Simulate Rollback
         run: |

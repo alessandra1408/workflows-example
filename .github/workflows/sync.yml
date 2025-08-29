@@ -83,7 +83,7 @@ jobs:
       - run: sleep 10
 
   deploy-cluster-2:
-    needs: setup-environment-and-context
+    needs: [setup-environment-and-context, wait-1]
     uses: ./.github/workflows/sync-regions.yml
     with:
       region_name: "Cluster 2 (Ohio)"
@@ -91,18 +91,12 @@ jobs:
 
   # ---- JOB DE ROLLBACK CONDICIONAL ----
   trigger-rollback:
-    runs-on: ubuntu-latest
-    # Roda se QUALQUER job anterior falhou ou foi cancelado (rejeitado)
     needs: [setup-environment-and-context]
-    # MUDANÇA PRINCIPAL: Este job agora é um portão de aprovação!
-    environment: ${{ needs.setup-environment-and-context.outputs.env_name }} && tech-approve
-    steps:
-      - name: 'Rollback Approved, Calling Rollback Logic'
-        run: echo "Aprovação de Rollback recebida. Executando a reversão..."
-      - uses: ./.github/workflows/rollback.yml
-        with:
-          stable_commit_sha: ${{ needs.setup-environment-and-context.outputs.stable_commit_sha }}
-          pr_number_to_revert: ${{ needs.setup-environment-and-context.outputs.pr_number }}
+    uses: ./.github/workflows/rollback.yml
+    with:
+      stable_commit_sha: ${{ needs.setup-environment-and-context.outputs.stable_commit_sha }}
+      pr_number_to_revert: ${{ needs.setup-environment-and-context.outputs.pr_number }}
+      environment_name: ${{ needs.setup-environment-and-context.outputs.env_name }}
 
 
   # Job Final: Limpeza do ambiente dinâmico
@@ -110,7 +104,7 @@ jobs:
     runs-on: ubuntu-latest
     # Roda sempre, independente do resultado final da pipeline
     if: always()
-    needs: [setup-environment-and-context, deploy-cluster-2]
+    needs: [setup-environment-and-context, deploy-cluster-1]
     environment: ${{ needs.setup-environment-and-context.outputs.env_name }} && tech-approve
     steps:
       - name: 'Delete Dynamic Environment'
