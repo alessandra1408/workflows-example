@@ -48,13 +48,25 @@ jobs:
     needs: apply-stable-state
     if: success()
     steps:
+      - name: 'Instalar/Atualizar gh CLI para a versão mais recente'
+        run: |
+          # Este é o script oficial de instalação do gh CLI para Debian/Ubuntu
+          type -p curl >/dev/null || (sudo apt-get update && sudo apt-get install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-key.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-key.gpg \
+          && sudo chmod go+r /usr/share/keyrings/githubcli-archive-key.gpg \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-key.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && sudo apt-get update \
+          && sudo apt-get install gh -y
+          echo "gh CLI instalado/atualizado:"
+          gh --version
+
       - name: 'Checkout da branch principal para criar o PR'
         uses: actions/checkout@v4
         with:
           ref: 'main'
+
       - name: 'Criar PR para reverter o código'
         env:
-          # Para este passo, o GH_TOKEN precisa ser o seu secret customizado se o padrão não tiver permissão
-          GH_TOKEN: ${{ secrets.GH_TOKEN }} 
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          gh pr revert ${{ inputs.pr_number_to_revert }} --yes --body "Rollback automático executado pela pipeline."
+          gh pr revert ${{ inputs.pr_number_to_revert }} --body "Rollback automático executado pela pipeline."
