@@ -55,7 +55,7 @@ jobs:
           STABLE_SHA=$(git rev-parse HEAD~1)
           echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
 
-      - name: '4. Create/Setup Dynamic Environment with Combined Approvers'
+       - name: '4. Create/Setup Dynamic Environment with Combined Approvers'
         id: create_env
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -69,34 +69,29 @@ jobs:
           echo "Criando ambiente dinâmico: ${ENV_NAME}"
           echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
 
-          # --- 2. Busca os aprovadores do ambiente 'tech-approve' ---
-          echo "Buscando aprovadores do ambiente 'tech-approve'..."
-          # Usamos 'jq' para extrair apenas a lista de 'reviewers' da regra de proteção
-          # O '|| true' evita que o script falhe se 'tech-approve' não existir ou não tiver aprovadores
+          # --- 2. Busca e TRANSFORMA os aprovadores do ambiente 'tech-approve' ---
+          echo "Buscando e formatando aprovadores do ambiente 'tech-approve'..."
+          # || true evita que o script falhe se 'tech-approve' não existir
           TECH_APPROVE_REVIEWERS=$(gh api "repos/${{ github.repository }}/environments/tech-approve" | \
-            jq '.protection_rules[] | select(.type == "required_reviewers") | .reviewers' || true)
+            jq '.protection_rules[] | select(.type == "required_reviewers") | .reviewers | map({type: .type, id: (if .type == "User" then .reviewer.id else .team.id end)})' || true)
           
-          # Se não houver aprovadores em tech-approve, inicializa como uma lista vazia
-          if [[ -z "$TECH_APPROVE_REVIEWERS" ]]; then
+          if [[ -z "$TECH_APPROVE_REVIEWERS" || "$TECH_APPROVE_REVIEWERS" == "null" ]]; then
             TECH_APPROVE_REVIEWERS="[]"
-            echo "Nenhum aprovador encontrado em 'tech-approve' ou ambiente não configurado. Começando com lista vazia."
+            echo "Nenhum aprovador encontrado em 'tech-approve'. Começando com lista vazia."
           else
-            echo "Aprovadores de 'tech-approve' encontrados."
+            echo "Aprovadores de 'tech-approve' formatados com sucesso."
           fi
 
           # --- 3. Prepara o objeto do aprovador do PR ---
           echo "Buscando ID do autor do PR: ${APPROVER}"
           USER_ID=$(gh api "users/${APPROVER}" | jq '.id')
-          # Cria um objeto JSON para o autor do PR
           PR_AUTHOR_REVIEWER=$(jq -n --argjson id "$USER_ID" '{type: "User", id: $id}')
           
           # --- 4. Combina as listas de aprovadores e remove duplicatas ---
           echo "Combinando aprovadores e removendo duplicatas..."
-          # Adiciona o autor do PR à lista e usa 'unique_by(.id)' para garantir que não haja duplicatas
           COMBINED_REVIEWERS=$(echo "$TECH_APPROVE_REVIEWERS" | jq ". + [$PR_AUTHOR_REVIEWER] | unique_by(.id)")
 
           # --- 5. Cria o payload final e atualiza o ambiente ---
-          # O payload final deve ter a estrutura { "reviewers": [...] }
           FINAL_PAYLOAD=$(jq -n --argjson reviewers "$COMBINED_REVIEWERS" '{reviewers: $reviewers}')
 
           echo "Configurando ambiente '${ENV_NAME}' com a seguinte lista de aprovadores:"
