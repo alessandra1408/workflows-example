@@ -55,7 +55,7 @@ jobs:
           STABLE_SHA=$(git rev-parse HEAD~1)
           echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
 
-       - name: '4. Create/Setup Dynamic Environment with Combined Approvers'
+      - name: '4. Create/Setup Dynamic Environment with Combined Approvers'
         id: create_env
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
