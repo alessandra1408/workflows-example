@@ -7,10 +7,14 @@ on:
       region_name:
         type: string
         required: true
+      environment_name:
+        type: string
+        required: true
 
 jobs:
   apply:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment_name }}
     steps:
       - name: Simulate Apply
         run: |
