@@ -125,13 +125,7 @@ jobs:
     steps:
       - run: sleep 10
 
-  deploy-cluster-2:
-    needs: [setup-environment-and-context, wait-1]
-    uses: ./.github/workflows/sync-regions.yml
-    with:
-      region_name: "Cluster 2 (Ohio)"
-      environment_name: ${{ needs.setup-environment-and-context.outputs.env_name }}
-
+  
   # ---- JOB DE ROLLBACK CONDICIONAL ----
   trigger-rollback:
     needs: [setup-environment-and-context, deploy-cluster-1]
@@ -142,6 +136,15 @@ jobs:
       environment_name: ${{ needs.setup-environment-and-context.outputs.env_name }}
       files_to_revert: ${{ needs.setup-environment-and-context.outputs.files_changed }}
     secrets: inherit
+
+  deploy-cluster-2:
+    if: needs.trigger-rollback.result != 'success'
+    needs: [setup-environment-and-context, wait-1, trigger-rollback]
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region_name: "Cluster 2 (Ohio)"
+      environment_name: ${{ needs.setup-environment-and-context.outputs.env_name }}
+
 
   # Job Final: Limpeza do ambiente dinâmico
   cleanup-environment:
