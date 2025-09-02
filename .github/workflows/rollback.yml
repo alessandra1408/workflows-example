@@ -22,15 +22,25 @@ on:
       environment:
         type: string
         required: true
+      region:
+        type: string
+        description: "Region"
+        required: true
+      region-name:
+        type: string
+        description: "The name of region"
+        required: true
 
 jobs:
-  us_east_1:
+  rollback:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     strategy:
       fail-fast: false
       matrix:
         file: ${{ fromJson(inputs.files_to_apply) }}
+        region: ${{ fromJson(inputs.region) }}
+        region-name: ${{ fromJson(inputs.region-name) }}
     steps:
       - name: Checkout Code at Correct Version
         uses: actions/checkout@v4
@@ -42,80 +52,69 @@ jobs:
           deck-version: 1.47.1
 
       - name: validate 
-        run: echo "job finished"
-
-  us_east_2:
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    strategy:
-      fail-fast: false
-      matrix:
-        file: ${{ fromJson(inputs.files_to_apply) }}
-    steps:
-      - name: Checkout Code at Correct Version
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.stable_commit_sha }}
-
-      - uses: kong/setup-deck@v1
-        with:
-          deck-version: 1.47.1
-
-      - name: validate 
-        run: echo "job finished"
-
-  us_east_3:
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    strategy:
-      fail-fast: false
-      matrix:
-        file: ${{ fromJson(inputs.files_to_apply) }}
-    steps:
-      - name: Checkout Code at Correct Version
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.stable_commit_sha }}
-
-      - uses: kong/setup-deck@v1
-        with:
-          deck-version: 1.47.1
-
-      - name: validate 
-        run: echo "job finished"
+        run: |
+          echo "job finished"
+          echo "region: ${{ inputs.region }}"
+          echo "region-name: ${{ inputs.region-name }}"
 
   create-revert-pr-manual:
     runs-on: ubuntu-latest
-    if: success()
+    needs: [rollback]
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: 'Checkout da branch principal'
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_TOKEN }} 
+          # Recomendo usar o token automático do GitHub e definir as permissões acima
+          token: ${{ secrets.GITHUB_TOKEN }} 
           ref: 'main'
 
       - name: 'Configurar Git'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-      - name: 'Executar Revert com Git e Criar PR com gh'
+
+      - name: 'Executar Revert PARCIAL e Criar PR'
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=${{ inputs.pr_number_to_revert }}
-          # Obter o SHA do commit de merge do PR original
           MERGE_COMMIT_SHA=$(gh pr view $PR_NUMBER --json mergeCommit --jq '.mergeCommit.oid')
-          # Criar uma nova branch para o revert
-          NEW_BRANCH="revert-${PR_NUMBER}-$(date +%s)"
+          
+          if [ -z "$MERGE_COMMIT_SHA" ] || [ "$MERGE_COMMIT_SHA" == "null" ]; then
+            echo "::error::Não foi possível encontrar o commit de merge para o PR #${PR_NUMBER}."
+            exit 1
+          fi
+          
+          NEW_BRANCH="revert-partial-${PR_NUMBER}-$(date +%s)"
           git checkout -b $NEW_BRANCH
-          # Executar o revert. -m 1 é essencial para reverter um merge commit.
-          # --no-edit evita que o git abra um editor de texto.
-          git revert -m 1 --no-edit $MERGE_COMMIT_SHA
+          
+          # --- Lógica do Revert Parcial ---
+          # 1. Aplica o reverte na memória, mas não cria o commit
+          git revert -m 1 --no-commit $MERGE_COMMIT_SHA
+          
+          # 2. Tira tudo da área de stage (index)
+          git reset
+          
+          # 3. Adiciona de volta APENAS as alterações dentro da pasta 'services/'
+          git add 'services/'
+          
+          # 4. Descarta todas as outras alterações indesejadas do revert
+          git checkout -- .
+          
+          # 5. Agora, finalmente, cria o commit com o revert parcial
+          git commit -m "Revert (services/): Rollback parcial do PR #${PR_NUMBER}"
+          
+          # --- Fim da Lógica ---
+          
           # Enviar a nova branch para o repositório
           git push origin $NEW_BRANCH
+          
           # Criar o Pull Request
           gh pr create \
             --base main \
             --head $NEW_BRANCH \
-            --title "Revert: Rollback do PR #${PR_NUMBER}" \
-            --body "Este PR reverte as alterações introduzidas no PR #${PR_NUMBER} como parte de um processo de rollback automatizado."
+            --title "Revert (services/): Rollback parcial do PR #${PR_NUMBER}" \
+            --body "Este PR reverte APENAS as alterações na pasta \`services/\` introduzidas no PR #${PR_NUMBER}."
