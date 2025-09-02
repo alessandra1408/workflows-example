@@ -119,15 +119,92 @@ jobs:
           echo "Environment Name: ${{ steps.create_env.outputs.env_name }}"
           echo "Files to Apply: ${{ steps.get_files.outputs.files }}"
 
-  us_east_1:
+  determine_environment:
+    name: Determinar Ambiente de Deploy
     needs: [setup_environment]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      contents: read
+    outputs:
+      final_env: ${{ steps.decide_env.outputs.environment_name }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Verificar Aprovadores e Definir Ambiente
+        id: decide_env
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+
+          PR_NUMBER=${{needs.setup_environment.outputs.pr_number}}
+
+          echo "PR encontrado: #${PR_NUMBER}"
+
+          echo "Listando aprovadores para o PR #${PR_NUMBER}..."
+          APPROVER_LIST=$(gh pr view $PR_NUMBER --json reviews --jq '.reviews.[] | select(.state == "APPROVED") | .author.login' | sort -u)
+          if [ -z "$APPROVER_LIST" ]; then
+            echo "Nenhum aprovador encontrado."
+            APPROVER_LIST=""
+          else
+            echo "Aprovadores encontrados:"
+            echo "$APPROVER_LIST"
+          fi
+
+          echo "Listando proprietários do repositório..."
+          REPO_OWNER_TYPE=$(gh repo view ${{ github.repository }} --json owner --jq '.owner.type')
+          
+          if [[ "$REPO_OWNER_TYPE" == "Organization" ]]; then
+            echo "Repositório de Organização. Lendo .github/CODEOWNERS..."
+            
+            CODEOWNERS_FILE_PATH=".github/CODEOWNERS"
+            if [ ! -f "$CODEOWNERS_FILE_PATH" ]; then
+              echo "::error::Arquivo CODEOWNERS não encontrado no caminho esperado: ${CODEOWNERS_FILE_PATH}."
+              exit 1
+            fi
+
+            OWNER_TEAM_WITH_AT=$(grep '^*' "$CODEOWNERS_FILE_PATH" | grep -oE '@[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+' | head -n 1)
+            if [ -z "$OWNER_TEAM_WITH_AT" ]; then
+                echo "::error::Não foi possível encontrar um time proprietário padrão (ex: '* @org/time') no arquivo CODEOWNERS."
+                exit 1
+            fi
+            
+            OWNER_TEAM_SLUG="${OWNER_TEAM_WITH_AT#@}"
+            echo "Time proprietário extraído do CODEOWNERS: ${OWNER_TEAM_SLUG}"
+
+            OWNER_LIST=$(gh api "orgs/${{ github.repository_owner }}/teams/${OWNER_TEAM_SLUG}/members" --jq '.[].login')
+          else
+            echo "Repositório Pessoal. O proprietário é o dono do repositório."
+            OWNER_LIST="${{ github.repository_owner }}"
+          fi
+          echo "Lista final de proprietários:"
+          echo "$OWNER_LIST"
+
+          echo "Comparando listas..."
+          OWNER_APPROVER_COUNT=$(echo "${APPROVER_LIST}" | grep -F -x -f <(echo "${OWNER_LIST}") | wc -l)
+          echo "Número de aprovadores que também são proprietários: ${OWNER_APPROVER_COUNT}"
+
+          if (( $OWNER_APPROVER_COUNT >= 2 )); then
+            FINAL_ENV=${{needs.setup_environment.outputs.env_name}}
+            echo "Decisão: Pelo menos 2 proprietários aprovaram. Selecionando ambiente '${FINAL_ENV}'."
+          else
+            FINAL_ENV=tech-approve
+            echo "Decisão: Menos de 2 proprietários aprovaram. Selecionando ambiente '${FINAL_ENV}'."
+          fi
+
+          echo "environment_name=${FINAL_ENV}" >> $GITHUB_OUTPUT
+
+  us_east_1:
+    needs: [setup_environment, determine_environment]
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-1
       region-name: virginia
       environment: config-us-east-1-stg
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
       pr_number: ${{ needs.setup_environment.outputs.pr_number }}
 
   wait_time:
@@ -138,19 +215,21 @@ jobs:
         run: sleep 1s
 
   trigger_rollback:
-    needs: [setup_environment, wait_time]
+    needs: [setup_environment, determine_environment, wait_time]
     uses: ./.github/workflows/rollback.yml
     with:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
-      environment: ${{ needs.setup_environment.outputs.env_name }}
+      environment: asass
       region: us-east-1
       region-name: virginia
+      dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
+
     secrets: inherit
 
   us_east_2:
-    needs: [setup_environment, us_east_1, trigger_rollback]
+    needs: [setup_environment, determine_environment, us_east_1, trigger_rollback]
     if: |
       (needs.trigger_rollback.result == 'failure') &&
       (needs.us_east_1.result == 'success') &&
@@ -161,11 +240,11 @@ jobs:
       region-name: virginia
       environment: config-us-east-2-stg
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
       pr_number: ${{ needs.setup_environment.outputs.pr_number }}
 
   trigger_rollback_2:
-    needs: [setup_environment, us_east_2]
+    needs: [setup_environment, determine_environment, us_east_2]
     uses: ./.github/workflows/rollback.yml
     with:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
@@ -174,6 +253,8 @@ jobs:
       environment: ${{ needs.setup_environment.outputs.env_name }}
       region: us-east-2
       region-name: ohio
+      dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
+
 
   cleanup-environment:
     runs-on: ubuntu-latest

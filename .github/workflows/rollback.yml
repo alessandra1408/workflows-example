@@ -31,8 +31,19 @@ on:
         type: string
         description: "The name of region"
         required: true
+      dynamic_environment:
+        type: string
+        description: "The name of dynamic environment"
+        required: true
 
 jobs:
+  approve_job:
+    runs-on: ubuntu-latest
+    environment: ${{inputs.dynamic_environment}}
+    steps:
+      - name: Aprovar Mudanças
+        run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
+        
   rollback:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
@@ -71,7 +82,6 @@ jobs:
       with:
         token: ${{ secrets.GH_TOKEN }}
         ref: 'main'
-        # Baixamos apenas os 2 últimos commits. É muito mais rápido!
         fetch-depth: 2 # <-- MUDANÇA IMPORTANTE
 
     - name: 'Configurar Git'
