@@ -27,14 +27,7 @@ on:
         type: string
         description: "SHA do commit estável"
         required: false
-      files_to_apply:
-        type: string
-        description: "Arquivos a serem aplicados"
-        required: false
-      pr_number_to_revert:
-        type: string
-        description: "Número do PR a ser revertido"
-        required: false
+
 
 jobs:
   start_job:
@@ -99,14 +92,3 @@ jobs:
 
       - name: validate 
         run: echo "job finished"
-
-
-  trigger_rollback:
-    needs: [apply]
-    uses: ./.github/workflows/rollback.yml
-    with:
-      files_to_apply: ${{ inputs.files_to_apply }}
-      stable_commit_sha: ${{ inputs.stable_commit_sha }}
-      pr_number_to_revert: ${{ inputs.pr_number_to_revert }}
-      environment: ${{ inputs.environment }}
-    secrets: inherit

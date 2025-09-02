@@ -1,6 +1,9 @@
 # Arquivo: .github/workflows/rollback.yml
-
 name: Rollback Kong Staging Configuration
+
+permissions:
+      contents: write
+      pull-requests: write
 
 on:
   workflow_call:
