@@ -116,14 +116,15 @@ jobs:
     name: Decide o Próximo Passo
     runs-on: ubuntu-latest
     needs: [deployment-gate]
-    if: always()
+    if: always() 
     outputs:
       should_rollback: ${{ steps.check_result.outputs.should_rollback }}
     steps:
       - name: Verificar resultado do gate
         id: check_result
         run: |
-          if ('${{ needs.deployment-gate.result }}' == 'failure') then
+          # Use a sintaxe correta do Bash com [[ ... ]]
+          if [[ "${{ needs.deployment-gate.result }}" == "failure" ]]; then
             echo "Decisão: Rollback necessário."
             echo "should_rollback=true" >> $GITHUB_OUTPUT
           else
