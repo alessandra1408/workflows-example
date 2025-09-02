@@ -108,5 +108,5 @@ jobs:
         gh pr create \
           --base main \
           --head $NEW_BRANCH \
-          --title "Rollback: Retore to commit ${PARENT_SHA}" \
+          --title "Rollback: Restore to commit ${PARENT_SHA}" \
           --body "Este PR executa um rollback na pasta \`services/\`, restaurando seu conteúdo para o estado anterior ao último merge. Isso foi acionado devido ao PR #${PR_NUMBER}."
