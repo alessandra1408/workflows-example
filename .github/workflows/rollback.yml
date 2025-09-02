@@ -12,6 +12,9 @@ on:
         type: string
         required: false
         default: ''
+      pr_number_to_revert:
+        type: string
+        required: true
 
 jobs:
   us_east_1:
@@ -73,3 +76,40 @@ jobs:
 
       - name: validate 
         run: echo "job finished"
+
+  create-revert-pr-manual:
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: 'Checkout da branch principal'
+        uses: actions/checkout@v4
+        with:
+          # Precisamos do token aqui para poder fazer push
+          token: ${{ secrets.GH_TOKEN }} 
+          ref: 'main'
+
+      - name: 'Configurar Git'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+      - name: 'Executar Revert com Git e Criar PR com gh'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          PR_NUMBER=${{ inputs.pr_number_to_revert }}
+          # Obter o SHA do commit de merge do PR original
+          MERGE_COMMIT_SHA=$(gh pr view $PR_NUMBER --json mergeCommit --jq '.mergeCommit.oid')
+          # Criar uma nova branch para o revert
+          NEW_BRANCH="revert-${PR_NUMBER}-$(date +%s)"
+          git checkout -b $NEW_BRANCH
+          # Executar o revert. -m 1 é essencial para reverter um merge commit.
+          # --no-edit evita que o git abra um editor de texto.
+          git revert -m 1 --no-edit $MERGE_COMMIT_SHA
+          # Enviar a nova branch para o repositório
+          git push origin $NEW_BRANCH
+          # Criar o Pull Request
+          gh pr create \
+            --base main \
+            --head $NEW_BRANCH \
+            --title "Revert: Rollback do PR #${PR_NUMBER}" \
+            --body "Este PR reverte as alterações introduzidas no PR #${PR_NUMBER} como parte de um processo de rollback automatizado."

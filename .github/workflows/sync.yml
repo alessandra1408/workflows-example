@@ -22,11 +22,19 @@ jobs:
       pr_number: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}
       stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}
       env_name: ${{ steps.create_env.outputs.env_name }}
+      files_to_apply: ${{ steps.get_files.outputs.files }}
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
+    
+      - name: 'Get changed files'
+        id: get_files
+        run: |
+          # Usamos git diff para encontrar os arquivos alterados no último commit
+          content=$(git diff --name-only HEAD~1 HEAD | grep -E 'ca-certs/staging|...' | jq -R -s -c 'split("\n")[:-1]')
+          echo "files=${content}" >> $GITHUB_OUTPUT
 
       - name: '1. Get PR Info & Determine Approver'
         id: get_pr_info_and_approver
@@ -107,7 +115,9 @@ jobs:
     if: needs.deployment-gate.result == 'cancelled'
     uses: ./.github/workflows/rollback.yml
     with:
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
     secrets: inherit
 
   cleanup-environment:
