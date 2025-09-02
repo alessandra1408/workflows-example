@@ -105,6 +105,8 @@ jobs:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
       environment: ${{ needs.setup_environment.outputs.env_name }}
+      region: us-east-1
+      region-name: virginia
     secrets: inherit
 
   us_east_2:
@@ -125,6 +127,8 @@ jobs:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
       environment: ${{ needs.setup_environment.outputs.env_name }}
+      region: us-east-2
+      region-name: ohio
 
   cleanup-environment:
     runs-on: ubuntu-latest
