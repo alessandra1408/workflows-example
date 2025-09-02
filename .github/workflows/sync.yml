@@ -69,46 +69,51 @@ jobs:
       - name: '3. Create/Setup Dynamic Environment Gate'
         id: create_env
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Recomendo usar GITHUB_TOKEN e definir permissões
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
           APPROVER: ${{ steps.get_pr_info_and_approver.outputs.approver }}
           PR_NUMBER: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}
         run: |
-          set -e
-
           ENV_NAME="apply-pr-${PR_NUMBER}"
-          echo "Criando/Configurando o ambiente dinâmico: ${ENV_NAME}"
           echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
-
-          echo "Buscando aprovadores do ambiente 'tech-approve'..."
-          TECH_APPROVE_REVIEWERS_JSON=$(gh api "repos/${{ github.repository }}/environments/tech-approve" | \
-            jq '.protection_rules[] | select(.type == "required_reviewers") | .reviewers | map({type: .type, id: (if .type == "User" then .reviewer.id else .team.id end)})' || true)
           
-          if [[ -z "$TECH_APPROVE_REVIEWERS_JSON" || "$TECH_APPROVE_REVIEWERS_JSON" == "null" ]]; then
-            TECH_APPROVE_REVIEWERS_JSON="[]"
-            echo "Nenhum aprovador encontrado em 'tech-approve'. Começando com lista vazia."
+            # --- 2. Busca os aprovadores do ambiente 'tech-approve' ---
+          echo "Buscando aprovadores do ambiente 'tech-approve'..."
+          # Usamos 'jq' para extrair apenas a lista de 'reviewers' da regra de proteção
+          # O '|| true' evita que o script falhe se 'tech-approve' não existir ou não tiver aprovadores
+          TECH_APPROVE_REVIEWERS=$(gh api "repos/${{ github.repository }}/environments/tech-approve" | \
+            jq '.protection_rules[] | select(.type == "required_reviewers") | .reviewers' || true)
+          
+          # Se não houver aprovadores em tech-approve, inicializa como uma lista vazia
+          if [[ -z "$TECH_APPROVE_REVIEWERS" ]]; then
+            TECH_APPROVE_REVIEWERS="[]"
+            echo "Nenhum aprovador encontrado em 'tech-approve' ou ambiente não configurado. Começando com lista vazia."
           else
-            echo "Aprovadores de 'tech-approve' encontrados e formatados."
+            echo "Aprovadores de 'tech-approve' encontrados."
           fi
 
+          # --- 3. Prepara o objeto do aprovador do PR ---
           echo "Buscando ID do autor do PR: ${APPROVER}"
           USER_ID=$(gh api "users/${APPROVER}" | jq '.id')
-          PR_AUTHOR_REVIEWER_JSON=$(jq -n --argjson id "$USER_ID" '{type: "User", id: $id}')
+          # Cria um objeto JSON para o autor do PR
+          PR_AUTHOR_REVIEWER=$(jq -n --argjson id "$USER_ID" '{type: "User", id: $id}')
           
+          # --- 4. Combina as listas de aprovadores e remove duplicatas ---
           echo "Combinando aprovadores e removendo duplicatas..."
-          COMBINED_REVIEWERS_JSON=$(echo "$TECH_APPROVE_REVIEWERS_JSON" | jq ". + [$PR_AUTHOR_REVIEWER_JSON] | unique_by(.id)")
+          # Adiciona o autor do PR à lista e usa 'unique_by(.id)' para garantir que não haja duplicatas
+          COMBINED_REVIEWERS=$(echo "$TECH_APPROVE_REVIEWERS" | jq ". + [$PR_AUTHOR_REVIEWER] | unique_by(.id)")
 
-          # --- 5. Cria o payload final e atualiza o ambiente via API ---
+          # --- 5. Cria o payload final e atualiza o ambiente ---
           # O payload final deve ter a estrutura { "reviewers": [...] }
-          FINAL_PAYLOAD=$(jq -n --argjson reviewers "$COMBINED_REVIEWERS_JSON" '{reviewers: $reviewers}')
+          FINAL_PAYLOAD=$(jq -n --argjson reviewers "$COMBINED_REVIEWERS" '{reviewers: $reviewers}')
 
-          echo "Configurando o ambiente '${ENV_NAME}' com a seguinte lista combinada de aprovadores:"
+          echo "Configurando ambiente '${ENV_NAME}' com a seguinte lista de aprovadores:"
           echo "$FINAL_PAYLOAD" | jq .
 
           gh api \
             --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" \
             --input - <<< "${FINAL_PAYLOAD}"
           
-          echo "Ambiente '${ENV_NAME}' configurado com sucesso."
+          echo "Ambiente '${ENV_NAME}' criado/atualizado com sucesso."
       
       - name: show_outputs
         run: |
@@ -147,11 +152,8 @@ jobs:
     secrets: inherit
 
   us_east_2:
-    needs: [setup_environment, us_east_1, trigger_rollback]
-    if: |
-      (needs.trigger_rollback.result == 'failure') &&
-      (needs.setup_environment.result == 'success') &&
-      (needs.us_east_1.result == 'success')
+    needs: [setup_environment, trigger_rollback]
+    if: failure()
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-1
