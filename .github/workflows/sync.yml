@@ -80,6 +80,14 @@ jobs:
           
           echo "Configuring environment ${ENV_NAME} for approver ${APPROVER}"
           gh api --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" --input - <<< "${REVIEWERS_JSON}"
+      
+      - name: show_outputs
+        run: |
+          echo "PR Number: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}"
+          echo "Approver: ${{ steps.get_pr_info_and_approver.outputs.approver }}"
+          echo "Stable Commit SHA: ${{ steps.get_stable_sha.outputs.sha }}"
+          echo "Environment Name: ${{ steps.create_env.outputs.env_name }}"
+          echo "Files to Apply: ${{ steps.get_files.outputs.files }}"
 
   us_east_1:
     needs: [setup_environment]
