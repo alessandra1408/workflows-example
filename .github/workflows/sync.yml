@@ -93,7 +93,7 @@ jobs:
   
   wait_time:
     needs: [us_east_1]
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     steps:
       - name: Conditional Sleep
         run: sleep 3s
@@ -109,7 +109,7 @@ jobs:
           echo "Para continuar o APPLY, clique em 'Approve'."
           echo "Para iniciar o ROLLBACK, clique em 'Reject'."
 
-  trigger-rollback:
+  trigger_rollback:
     needs: [setup_environment, deployment-gate]
     if:  needs.deployment-gate.result == 'failure'
     uses: ./.github/workflows/rollback.yml
@@ -121,7 +121,7 @@ jobs:
     secrets: inherit
 
   us_east_2:
-    needs: [setup_environment, us_east_1]
+    needs: [setup_environment, us_east_1, trigger_rollback]
     if: success()
     uses: ./.github/workflows/sync-regions.yml
     with:
@@ -154,7 +154,7 @@ jobs:
   cleanup-environment:
     runs-on: ubuntu-latest
     if: always()
-    needs: [setup_environment, us_east_2]
+    needs: [setup_environment, us_east_2, trigger_rollback_2]
     steps:
       - name: 'Delete Dynamic Environment'
         env:
