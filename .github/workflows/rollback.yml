@@ -64,53 +64,48 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - name: 'Checkout da branch principal (main)'
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GH_TOKEN }} 
-          ref: 'main'
+    - name: 'Checkout da branch principal (com histórico mínimo)'
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GH_TOKEN }}
+        ref: 'main'
+        # Baixamos apenas os 2 últimos commits. É muito mais rápido!
+        fetch-depth: 2 # <-- MUDANÇA IMPORTANTE
 
-      - name: 'Configurar Git'
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+    - name: 'Configurar Git'
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-      - name: 'Executar Rollback com Git Checkout e Criar PR'
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          STABLE_SHA=${{ inputs.stable_commit_sha }}
-          PR_NUMBER=${{ inputs.pr_number_to_revert }}
-          
-          echo "Iniciando rollback da pasta 'services/' para o estado do commit ${STABLE_SHA}"
-          
-          NEW_BRANCH="rollback-services-pr-${PR_NUMBER}-$(date +%s)"
-          git checkout -b $NEW_BRANCH
-          
-          # --- NOVA LÓGICA DE ROLLBACK ---
-          # Aqui, restauramos a pasta 'services/' para o estado exato
-          # em que ela estava no commit estável.
-          # Isso irá deletar arquivos novos, restaurar arquivos deletados e
-          # reverter modificações, tudo dentro de 'services/'.
-          git checkout ${STABLE_SHA} -- 'services/'
-          
-          # Agora, fazemos o commit das mudanças (se houver alguma)
-          # O 'git diff-index' verifica se há mudanças para commitar
-          if ! git diff-index --quiet HEAD; then
-            git commit -m "Rollback (services/): Restaura pasta para o estado de ${STABLE_SHA:0:7}"
-          else
-            echo "Nenhuma mudança detectada na pasta 'services/' entre main e o commit estável. Nada para fazer."
-            # Se não houver mudanças, podemos parar aqui para não criar um PR vazio.
-            # (Opcional: você pode adicionar lógica para sair se não houver mudanças)
-          fi
-          # --- FIM DA LÓGICA ---
-          
-          # Enviar a nova branch para o repositório
-          git push origin $NEW_BRANCH
-          
-          # Criar o Pull Request
-          gh pr create \
-            --base main \
-            --head $NEW_BRANCH \
-            --title "Rollback (services/): Restaura para o commit ${STABLE_SHA:0:7}" \
-            --body "Este PR executa um rollback na pasta \`services/\`, restaurando seu conteúdo para o estado do commit estável \`${STABLE_SHA}\`. Isso foi acionado devido ao PR #${PR_NUMBER}."
+    - name: 'Executar Rollback com Git Checkout e Criar PR'
+      env:
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      run: |
+        PR_NUMBER=${{ inputs.pr_number_to_revert }} # Mantemos para o título do PR
+        
+        echo "Iniciando rollback da pasta 'services/' para o estado do commit anterior (main~1)"
+        
+        NEW_BRANCH="rollback-services-pr-${PR_NUMBER}-$(date +%s)"
+        git checkout -b $NEW_BRANCH
+        
+        # --- LÓGICA OTIMIZADA DE ROLLBACK ---
+        # Restauramos a pasta 'services/' para o estado do commit
+        # PAI do último commit da main.
+        git checkout main~1 -- 'services/'
+        
+        if ! git diff-index --quiet HEAD; then
+          # O SHA do commit anterior pode ser obtido com 'git rev-parse HEAD~1'
+          PARENT_SHA=$(git rev-parse --short HEAD~1)
+          git commit -m "Rollback (services/): Restaura pasta para o estado de ${PARENT_SHA}"
+        else
+          echo "Nenhuma mudança para reverter na pasta 'services/'."
+        fi
+        
+        git push origin $NEW_BRANCH
+        
+        PARENT_SHA=$(git rev-parse --short HEAD~1)
+        gh pr create \
+          --base main \
+          --head $NEW_BRANCH \
+          --title "Rollback (services/): Restaura para o commit ${PARENT_SHA}" \
+          --body "Este PR executa um rollback na pasta \`services/\`, restaurando seu conteúdo para o estado anterior ao último merge. Isso foi acionado devido ao PR #${PR_NUMBER}."
