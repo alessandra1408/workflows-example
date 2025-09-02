@@ -151,7 +151,7 @@ jobs:
             FINAL_ENV=${{inputs.dynamic_environment}}
             echo "Decisão: Pelo menos 2 proprietários aprovaram. Selecionando ambiente '${FINAL_ENV}'."
           else
-            FINAL_ENV=${{inputs.environment}}
+            FINAL_ENV=tech-approve
             echo "Decisão: Menos de 2 proprietários aprovaram. Selecionando ambiente '${FINAL_ENV}'."
           fi
 
