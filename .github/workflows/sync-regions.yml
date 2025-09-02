@@ -80,7 +80,8 @@ jobs:
             echo "files=${{ needs.filesChanged.outputs.files }}" >> $GITHUB_OUTPUT
           fi
 
-  determine-environment:
+  determine_environment:
+    needs: [select-files]
     name: Determinar Ambiente de Deploy
     runs-on: ubuntu-latest
     permissions:
@@ -150,15 +151,15 @@ jobs:
             FINAL_ENV=${{inputs.dynamic_environment}}
             echo "Decisão: Pelo menos 2 proprietários aprovaram. Selecionando ambiente '${FINAL_ENV}'."
           else
-            FINAL_ENV=${{inputs.region}}
+            FINAL_ENV=${{inputs.environment}}
             echo "Decisão: Menos de 2 proprietários aprovaram. Selecionando ambiente '${FINAL_ENV}'."
           fi
 
           echo "environment_name=${FINAL_ENV}" >> $GITHUB_OUTPUT
   apply:
     runs-on: ubuntu-latest
-    needs: [select-files, determine-environment]
-    environment: ${{ needs.determine-environment.outputs.final_env }}s
+    needs: [select-files, determine_environment]
+    environment: ${{ needs.determine_environment.outputs.final_env }}s
     strategy:
       fail-fast: false
       matrix:
