@@ -1,7 +1,7 @@
 name: Push configs to Kong API GW Staging
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 on:
