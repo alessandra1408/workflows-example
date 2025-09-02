@@ -2,7 +2,7 @@
 name: Rollback Kong Staging Configuration
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   actions: read
 
@@ -60,9 +60,6 @@ jobs:
   create-revert-pr-manual:
     runs-on: ubuntu-latest
     needs: [rollback]
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
       - name: 'Checkout da branch principal'
         uses: actions/checkout@v4
