@@ -17,7 +17,7 @@ on:
 
 jobs:
   setup_environment:
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     outputs:
       pr_number: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}
       stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}
@@ -91,7 +91,7 @@ jobs:
       environment: "config-us-east-1-stg"
 
   deployment-gate:
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     needs: [setup_environment, us_east_1]
     environment: ${{ needs.setup_environment.outputs.env_name }}
     steps:
