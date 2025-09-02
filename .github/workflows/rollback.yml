@@ -59,16 +59,14 @@ jobs:
 
   create-revert-pr-manual:
     runs-on: ubuntu-latest
-    needs: [rollback]
     permissions:
       contents: write
       pull-requests: write
     steps:
-      - name: 'Checkout da branch principal'
+      - name: 'Checkout da branch principal (main)'
         uses: actions/checkout@v4
         with:
-          # Recomendo usar o token automático do GitHub e definir as permissões acima
-          token: ${{ secrets.GITHUB_TOKEN }} 
+          token: ${{ secrets.GH_TOKEN }} 
           ref: 'main'
 
       - name: 'Configurar Git'
@@ -76,38 +74,35 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-      - name: 'Executar Revert PARCIAL e Criar PR'
+      - name: 'Executar Rollback com Git Checkout e Criar PR'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
+          STABLE_SHA=${{ inputs.stable_commit_sha }}
           PR_NUMBER=${{ inputs.pr_number_to_revert }}
-          MERGE_COMMIT_SHA=$(gh pr view $PR_NUMBER --json mergeCommit --jq '.mergeCommit.oid')
           
-          if [ -z "$MERGE_COMMIT_SHA" ] || [ "$MERGE_COMMIT_SHA" == "null" ]; then
-            echo "::error::Não foi possível encontrar o commit de merge para o PR #${PR_NUMBER}."
-            exit 1
-          fi
+          echo "Iniciando rollback da pasta 'services/' para o estado do commit ${STABLE_SHA}"
           
-          NEW_BRANCH="revert-partial-${PR_NUMBER}-$(date +%s)"
+          NEW_BRANCH="rollback-services-pr-${PR_NUMBER}-$(date +%s)"
           git checkout -b $NEW_BRANCH
           
-          # --- Lógica do Revert Parcial ---
-          # 1. Aplica o reverte na memória, mas não cria o commit
-          git revert -m 1 --no-commit $MERGE_COMMIT_SHA
+          # --- NOVA LÓGICA DE ROLLBACK ---
+          # Aqui, restauramos a pasta 'services/' para o estado exato
+          # em que ela estava no commit estável.
+          # Isso irá deletar arquivos novos, restaurar arquivos deletados e
+          # reverter modificações, tudo dentro de 'services/'.
+          git checkout ${STABLE_SHA} -- 'services/'
           
-          # 2. Tira tudo da área de stage (index)
-          git reset
-          
-          # 3. Adiciona de volta APENAS as alterações dentro da pasta 'services/'
-          git add 'services/'
-          
-          # 4. Descarta todas as outras alterações indesejadas do revert
-          git checkout -- .
-          
-          # 5. Agora, finalmente, cria o commit com o revert parcial
-          git commit -m "Revert (services/): Rollback parcial do PR #${PR_NUMBER}"
-          
-          # --- Fim da Lógica ---
+          # Agora, fazemos o commit das mudanças (se houver alguma)
+          # O 'git diff-index' verifica se há mudanças para commitar
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "Rollback (services/): Restaura pasta para o estado de ${STABLE_SHA:0:7}"
+          else
+            echo "Nenhuma mudança detectada na pasta 'services/' entre main e o commit estável. Nada para fazer."
+            # Se não houver mudanças, podemos parar aqui para não criar um PR vazio.
+            # (Opcional: você pode adicionar lógica para sair se não houver mudanças)
+          fi
+          # --- FIM DA LÓGICA ---
           
           # Enviar a nova branch para o repositório
           git push origin $NEW_BRANCH
@@ -116,5 +111,5 @@ jobs:
           gh pr create \
             --base main \
             --head $NEW_BRANCH \
-            --title "Revert (services/): Rollback parcial do PR #${PR_NUMBER}" \
-            --body "Este PR reverte APENAS as alterações na pasta \`services/\` introduzidas no PR #${PR_NUMBER}."
+            --title "Rollback (services/): Restaura para o commit ${STABLE_SHA:0:7}" \
+            --body "Este PR executa um rollback na pasta \`services/\`, restaurando seu conteúdo para o estado do commit estável \`${STABLE_SHA}\`. Isso foi acionado devido ao PR #${PR_NUMBER}."

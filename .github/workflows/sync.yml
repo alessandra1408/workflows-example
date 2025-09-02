@@ -118,8 +118,8 @@ jobs:
     secrets: inherit
 
   us_east_2:
-    needs: [setup_environment, us_east_1, trigger_rollback]
-    if: success()
+    needs: [setup_environment, trigger_rollback]
+    if: failure()
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-1
