@@ -27,14 +27,6 @@ on:
         type: string
         description: "SHA do commit estável"
         required: false
-      files_to_apply:
-        type: string
-        description: "Arquivos a serem aplicados"
-        required: false
-      pr_number_to_revert:
-        type: string
-        description: "Número do PR a ser revertido"
-        required: false
 
 jobs:
   start_job:
@@ -99,46 +91,3 @@ jobs:
 
       - name: validate 
         run: echo "job finished"
-
-  deployment-gate:
-    runs-on: ubuntu-latest
-    needs: [apply]
-    environment: ${{ inputs.environment }}
-    steps:
-      - name: 'Aguardando decisão...'
-        run: |
-          echo "Pipeline em pausa. Ambiente de decisão: environment: ${{ inputs.environment }}"
-          echo "Para continuar o APPLY, clique em 'Approve'."
-          echo "Para iniciar o ROLLBACK, clique em 'Reject'."
-
-
-  handle-gate-result:
-    name: Decide o Próximo Passo
-    runs-on: ubuntu-latest
-    needs: [deployment-gate]
-    if: always() 
-    outputs:
-      should_rollback: ${{ steps.check_result.outputs.should_rollback }}
-    steps:
-      - name: Verificar resultado do gate
-        id: check_result
-        run: |
-          # Use a sintaxe correta do Bash com [[ ... ]]
-          if [[ "${{ needs.deployment-gate.result }}" == "failure" ]]; then
-            echo "Decisão: Rollback necessário."
-            echo "should_rollback=true" >> $GITHUB_OUTPUT
-          else
-            echo "Decisão: Nenhuma ação de rollback necessária."
-            echo "should_rollback=false" >> $GITHUB_OUTPUT
-          fi
-
-  trigger-rollback:
-    needs: [handle-gate-result]
-    if: needs.handle-gate-result.outputs.should_rollback == 'true'
-    uses: ./.github/workflows/rollback.yml
-    with:
-      files_to_apply: ${{ inputs.files_to_apply }}
-      stable_commit_sha: ${{ inputs.stable_commit_sha }}
-      pr_number_to_revert: ${{ inputs.pr_number_to_revert }}
-      environment: ${{ inputs.environment }}
-    secrets: inherit
