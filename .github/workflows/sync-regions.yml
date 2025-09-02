@@ -72,7 +72,7 @@ jobs:
             echo "files=${{ needs.filesChanged.outputs.files }}" >> $GITHUB_OUTPUT
           fi
   apply:
-    runs-on: ubuntu-latest-on-demand
+    runs-on: ubuntu-latest
     needs: [select-files]
     environment: ${{ inputs.environment }}
     strategy:

@@ -18,7 +18,7 @@ on:
 
 jobs:
   us_east_1:
-    runs-on: ubuntu-latest-on-demand
+    runs-on: ubuntu-latest
     environment: teste
     strategy:
       fail-fast: false
@@ -38,7 +38,7 @@ jobs:
         run: echo "job finished"
 
   us_east_2:
-    runs-on: ubuntu-latest-on-demand
+    runs-on: ubuntu-latest
     environment: teste
     strategy:
       fail-fast: false
@@ -58,7 +58,7 @@ jobs:
         run: echo "job finished"
 
   us_east_3:
-    runs-on: ubuntu-latest-on-demand
+    runs-on: ubuntu-latest
     environment: teste
     strategy:
       fail-fast: false
