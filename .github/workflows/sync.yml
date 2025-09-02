@@ -102,16 +102,37 @@ jobs:
     runs-on: ubuntu-latest
     needs: [wait_time, us_east_1, setup_environment]
     environment: ${{ needs.setup_environment.outputs.env_name }}
+    if: always()
     steps:
       - name: 'Aguardando decisão...'
         run: |
           echo "Pipeline em pausa. Ambiente de decisão: environment: ${{ needs.setup_environment.outputs.env_name }}"
           echo "Para continuar o APPLY, clique em 'Approve'."
           echo "Para iniciar o ROLLBACK, clique em 'Reject'."
+          
+  handle-gate-result:
+    name: Decide o Próximo Passo
+    runs-on: ubuntu-latest
+    needs: [setup_environment, deployment-gate]
+    if: always() 
+    outputs:
+      should_rollback: ${{ steps.check_result.outputs.should_rollback }}
+    steps:
+      - name: Verificar resultado do gate
+        id: check_result
+        run: |
+          # Use a sintaxe correta do Bash com [[ ... ]]
+          if [[ "${{ needs.deployment-gate.result }}" == "failure" ]]; then
+            echo "Decisão: Rollback necessário."
+            echo "should_rollback=true" >> $GITHUB_OUTPUT
+          else
+            echo "Decisão: Nenhuma ação de rollback necessária."
+            echo "should_rollback=false" >> $GITHUB_OUTPUT
+          fi
 
   trigger_rollback:
-    needs: [setup_environment, deployment-gate]
-    if:  needs.deployment-gate.result == 'failure'
+    needs: [setup_environment, handle-gate-result]
+    if:  needs.handle-gate-result.outputs.should_rollback == 'true'
     uses: ./.github/workflows/rollback.yml
     with:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
