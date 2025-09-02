@@ -68,18 +68,46 @@ jobs:
       - name: '3. Create/Setup Dynamic Environment Gate'
         id: create_env
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Recomendo usar GITHUB_TOKEN e definir permissões
           APPROVER: ${{ steps.get_pr_info_and_approver.outputs.approver }}
           PR_NUMBER: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}
         run: |
+          set -e
+
           ENV_NAME="apply-pr-${PR_NUMBER}"
+          echo "Criando/Configurando o ambiente dinâmico: ${ENV_NAME}"
           echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
+
+          echo "Buscando aprovadores do ambiente 'tech-approve'..."
+          TECH_APPROVE_REVIEWERS_JSON=$(gh api "repos/${{ github.repository }}/environments/tech-approve" | \
+            jq '.protection_rules[] | select(.type == "required_reviewers") | .reviewers | map({type: .type, id: (if .type == "User" then .reviewer.id else .team.id end)})' || true)
           
+          if [[ -z "$TECH_APPROVE_REVIEWERS_JSON" || "$TECH_APPROVE_REVIEWERS_JSON" == "null" ]]; then
+            TECH_APPROVE_REVIEWERS_JSON="[]"
+            echo "Nenhum aprovador encontrado em 'tech-approve'. Começando com lista vazia."
+          else
+            echo "Aprovadores de 'tech-approve' encontrados e formatados."
+          fi
+
+          echo "Buscando ID do autor do PR: ${APPROVER}"
           USER_ID=$(gh api "users/${APPROVER}" | jq '.id')
-          REVIEWERS_JSON="{ \"reviewers\": [ { \"type\": \"User\", \"id\": ${USER_ID} } ] }"
+          PR_AUTHOR_REVIEWER_JSON=$(jq -n --argjson id "$USER_ID" '{type: "User", id: $id}')
           
-          echo "Configuring environment ${ENV_NAME} for approver ${APPROVER}"
-          gh api --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" --input - <<< "${REVIEWERS_JSON}"
+          echo "Combinando aprovadores e removendo duplicatas..."
+          COMBINED_REVIEWERS_JSON=$(echo "$TECH_APPROVE_REVIEWERS_JSON" | jq ". + [$PR_AUTHOR_REVIEWER_JSON] | unique_by(.id)")
+
+          # --- 5. Cria o payload final e atualiza o ambiente via API ---
+          # O payload final deve ter a estrutura { "reviewers": [...] }
+          FINAL_PAYLOAD=$(jq -n --argjson reviewers "$COMBINED_REVIEWERS_JSON" '{reviewers: $reviewers}')
+
+          echo "Configurando o ambiente '${ENV_NAME}' com a seguinte lista combinada de aprovadores:"
+          echo "$FINAL_PAYLOAD" | jq .
+
+          gh api \
+            --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" \
+            --input - <<< "${FINAL_PAYLOAD}"
+          
+          echo "Ambiente '${ENV_NAME}' configurado com sucesso."
       
       - name: show_outputs
         run: |
