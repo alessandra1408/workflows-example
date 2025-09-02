@@ -90,7 +90,6 @@ jobs:
         NEW_BRANCH="rollback-services-pr-${PR_NUMBER}-$(date +%s)"
         git checkout -b $NEW_BRANCH
         
-        # --- LÓGICA OTIMIZADA DE ROLLBACK ---
         # Restauramos a pasta 'services/' para o estado do commit
         # PAI do último commit da main.
         git checkout main~1 -- 'services/'
@@ -98,7 +97,7 @@ jobs:
         if ! git diff-index --quiet HEAD; then
           # O SHA do commit anterior pode ser obtido com 'git rev-parse HEAD~1'
           PARENT_SHA=$(git rev-parse --short HEAD~1)
-          git commit -m "Rollback (services/): Restaura pasta para o estado de ${PARENT_SHA}"
+          git commit -m "revert/restore service folder to commit state in ${PARENT_SHA}"
         else
           echo "Nenhuma mudança para reverter na pasta 'services/'."
         fi
@@ -109,5 +108,5 @@ jobs:
         gh pr create \
           --base main \
           --head $NEW_BRANCH \
-          --title "Rollback (services/): Restaura para o commit ${PARENT_SHA}" \
+          --title "Rollback: Retore to commit ${PARENT_SHA}" \
           --body "Este PR executa um rollback na pasta \`services/\`, restaurando seu conteúdo para o estado anterior ao último merge. Isso foi acionado devido ao PR #${PR_NUMBER}."
