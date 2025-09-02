@@ -113,7 +113,7 @@ jobs:
 
   trigger-rollback:
     needs: [deployment-gate]
-    if: needs.deployment-gate.result == 'cancelled'
+    if: needs.deployment-gate.result == 'failure'
     uses: ./.github/workflows/rollback.yml
     with:
       files_to_apply: ${{ inputs.files_to_apply }}

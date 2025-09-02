@@ -92,6 +92,13 @@ jobs:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
+  
+  wait_time:
+    needs: [us_east_1]
+    runs-on: small-runner
+    steps:
+      - name: Conditional Sleep
+        run: sleep 3s
 
   us_east_2:
     needs: [setup_environment, us_east_1]
