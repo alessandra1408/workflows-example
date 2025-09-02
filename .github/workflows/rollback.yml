@@ -5,6 +5,7 @@ permissions:
   contents: write
   pull-requests: write
   actions: read
+  deployments: write
 
 on:
   workflow_call:
@@ -63,6 +64,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      deployments: write
     steps:
     - name: 'Checkout da branch principal (com histórico mínimo)'
       uses: actions/checkout@v4

@@ -3,6 +3,7 @@ name: Push configs to Kong API GW Staging
 permissions:
   contents: write
   pull-requests: write
+  deployments: write
 
 on:
   workflow_call:

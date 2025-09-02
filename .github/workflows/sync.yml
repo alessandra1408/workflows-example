@@ -4,6 +4,7 @@ permissions:
   contents: write
   pull-requests: write
   actions: read
+  deployments: write
 
 on:
   push:
@@ -146,8 +147,11 @@ jobs:
     secrets: inherit
 
   us_east_2:
-    needs: [setup_environment, trigger_rollback]
-    if: failure()
+    needs: [setup_environment, us_east_1, trigger_rollback]
+    if: |
+      (needs.trigger_rollback.result == 'failure') &&
+      (needs.setup_environment.result == 'success') &&
+      (needs.us_east_1.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-1
