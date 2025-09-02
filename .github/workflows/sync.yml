@@ -88,42 +88,27 @@ jobs:
     with:
       region: us-east-1
       region-name: virginia
-      environment: "config-us-east-1-stg"
-
-  deployment-gate:
-    runs-on: ubuntu-latest
-    needs: [setup_environment, us_east_1]
-    environment: ${{ needs.setup_environment.outputs.env_name }}
-    steps:
-      - name: 'Aguardando decisão...'
-        run: |
-          echo "Pipeline em pausa. Ambiente de decisão: ${{ needs.setup_environment.outputs.env_name }}"
-          echo "Para continuar o APPLY, clique em 'Approve'."
-          echo "Para iniciar o ROLLBACK, clique em 'Reject'."
+      environment: ${{ needs.setup_environment.outputs.env_name }}
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
 
   us_east_2:
-    needs: [setup_environment, deployment-gate]
+    needs: [setup_environment, us_east_1]
     if: success()
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-1
       region-name: virginia
-      environment: "config-us-east-1-stg"
-  
-  trigger-rollback:
-    needs: [setup_environment, deployment-gate]
-    if: needs.deployment-gate.result == 'cancelled'
-    uses: ./.github/workflows/rollback.yml
-    with:
+      environment: ${{ needs.setup_environment.outputs.env_name }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
-    secrets: inherit
 
   cleanup-environment:
     runs-on: ubuntu-latest
     if: always()
-    needs: [setup_environment, deployment-gate]
+    needs: [setup_environment, us_east_2]
     steps:
       - name: 'Delete Dynamic Environment'
         env:
