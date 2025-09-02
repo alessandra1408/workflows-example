@@ -1,0 +1,75 @@
+# Arquivo: .github/workflows/rollback.yml
+
+name: Rollback Kong Staging Configuration
+
+on:
+  workflow_call:
+    inputs:
+      files_to_apply:
+        type: string
+        required: true
+      stable_commit_sha:
+        type: string
+        required: false
+        default: ''
+
+jobs:
+  us_east_1:
+    runs-on: ubuntu-latest-on-demand
+    environment: teste
+    strategy:
+      fail-fast: false
+      matrix:
+        file: ${{ fromJson(inputs.files_to_apply) }}
+    steps:
+      - name: Checkout Code at Correct Version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.stable_commit_sha }}
+
+      - uses: kong/setup-deck@v1
+        with:
+          deck-version: 1.47.1
+
+      - name: validate 
+        run: echo "job finished"
+
+  us_east_2:
+    runs-on: ubuntu-latest-on-demand
+    environment: teste
+    strategy:
+      fail-fast: false
+      matrix:
+        file: ${{ fromJson(inputs.files_to_apply) }}
+    steps:
+      - name: Checkout Code at Correct Version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.stable_commit_sha }}
+
+      - uses: kong/setup-deck@v1
+        with:
+          deck-version: 1.47.1
+
+      - name: validate 
+        run: echo "job finished"
+
+  us_east_3:
+    runs-on: ubuntu-latest-on-demand
+    environment: teste
+    strategy:
+      fail-fast: false
+      matrix:
+        file: ${{ fromJson(inputs.files_to_apply) }}
+    steps:
+      - name: Checkout Code at Correct Version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.stable_commit_sha }}
+
+      - uses: kong/setup-deck@v1
+        with:
+          deck-version: 1.47.1
+
+      - name: validate 
+        run: echo "job finished"

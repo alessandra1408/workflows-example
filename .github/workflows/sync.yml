@@ -1,0 +1,124 @@
+name: Push configs to Kong API GW on Staging (All Clusters)
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+on:
+  push:
+    paths:
+      - "ca-certs/staging/*.yml"
+      - "consumers/staging/*.yml"
+      - "plugins/staging/*.yml"
+      - "services/staging/*.yml"
+    branches:
+      - "main"
+
+jobs:
+  setup_environment:
+    runs-on: small-runner
+    outputs:
+      pr_number: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}
+      stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}
+      env_name: ${{ steps.create_env.outputs.env_name }}
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: '1. Get PR Info & Determine Approver'
+        id: get_pr_info_and_approver
+        env: 
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          PR_DATA=$(gh pr list --search "${{ github.sha }}" --state merged --json number,author)
+          PR_NUMBER=$(echo "$PR_DATA" | jq '.[0].number')
+          PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.[0].author.login')
+          
+          REVIEWS=$(gh pr view $PR_NUMBER --json reviews --jq '.reviews.[] | select(.state == "APPROVED") | .author.login')
+          APPROVAL_COUNT=$(echo "${REVIEWS}" | sort -u | wc -l)
+          
+          if (( $APPROVAL_COUNT >= 2 )); then
+            APPROVER_LOGIN=$PR_AUTHOR
+          else
+            APPROVER_LOGIN=${{ github.repository_owner }}
+          fi
+
+          echo "PR Number: ${PR_NUMBER}"
+          echo "Final Approver for Gate: ${APPROVER_LOGIN}"
+
+          echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+          echo "approver=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
+
+      - name: '2. Get Stable Commit SHA'
+        id: get_stable_sha
+        run: |
+          STABLE_SHA=$(git rev-parse HEAD~1)
+          echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
+
+      - name: '3. Create/Setup Dynamic Environment Gate'
+        id: create_env
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          APPROVER: ${{ steps.get_pr_info_and_approver.outputs.approver }}
+          PR_NUMBER: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}
+        run: |
+          ENV_NAME="apply-pr-${PR_NUMBER}"
+          echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
+          
+          USER_ID=$(gh api "users/${APPROVER}" | jq '.id')
+          REVIEWERS_JSON="{ \"reviewers\": [ { \"type\": \"User\", \"id\": ${USER_ID} } ] }"
+          
+          echo "Configuring environment ${ENV_NAME} for approver ${APPROVER}"
+          gh api --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" --input - <<< "${REVIEWERS_JSON}"
+
+  us_east_1:
+    needs: [setup_environment]
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-1
+      region-name: virginia
+      environment: "config-us-east-1-stg"
+
+  deployment-gate:
+    runs-on: small-runner
+    needs: [setup_environment, us_east_1]
+    environment: ${{ needs.setup_environment.outputs.env_name }}
+    steps:
+      - name: 'Aguardando decisão...'
+        run: |
+          echo "Pipeline em pausa. Ambiente de decisão: ${{ needs.setup_environment.outputs.env_name }}"
+          echo "Para continuar o APPLY, clique em 'Approve'."
+          echo "Para iniciar o ROLLBACK, clique em 'Reject'."
+
+  us_east_2:
+    needs: [setup_environment, deployment-gate]
+    if: success()
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-1
+      region-name: virginia
+      environment: "config-us-east-1-stg"
+  
+  trigger-rollback:
+    needs: [setup_environment, deployment-gate]
+    if: needs.deployment-gate.result == 'cancelled'
+    uses: ./.github/workflows/rollback.yml
+    with:
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+    secrets: inherit
+
+  cleanup-environment:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [setup_environment, deployment-gate]
+    steps:
+      - name: 'Delete Dynamic Environment'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          ENV_NAME: ${{ needs.setup_environment.outputs.env_name }}
+        run: |
+          echo "Limpando o ambiente de decisão: ${ENV_NAME}"
+          gh api --method DELETE "repos/${{ github.repository }}/environments/${ENV_NAME}"
