@@ -51,8 +51,8 @@ jobs:
       fail-fast: false
       matrix:
         file: ${{ fromJson(inputs.files_to_apply) }}
-        region: [ '${{ inputs.region }}' ]
-        region-name: [ '${{ inputs.region-name }}' ]
+        rregion: ${{ fromJson(inputs.region) }}
+        region-name: ${{ fromJson(inputs.region-name) }}
     steps:
       - name: Checkout Code at Correct Version
         uses: actions/checkout@v4

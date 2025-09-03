@@ -250,9 +250,9 @@ jobs:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
-      environment: ${{ needs.setup_environment.outputs.env_name }}
-      region: us-east-2
-      region-name: ohio
+      environment: asass,bsbsbs
+      region: us-east-1,us-east-2
+      region-name: virginia,ohio
       dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
 
 
