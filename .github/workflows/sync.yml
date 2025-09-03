@@ -238,8 +238,8 @@ jobs:
       dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
       pr_number: ${{ needs.setup_environment.outputs.pr_number }}
 
-  trigger_rollback_2:
-    needs: [setup_environment, determine_environment]
+  trigger_rollback:
+    needs: [setup_environment, determine_environment, us_east_1]
     uses: ./.github/workflows/rollback.yml
     with:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
@@ -248,11 +248,10 @@ jobs:
       environment: config-us-east-1-stg
       dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
 
-
   cleanup-environment:
     runs-on: ubuntu-latest
     if: always()
-    needs: [setup_environment, us_east_2, trigger_rollback_2]
+    needs: [setup_environment, us_east_2]
     steps:
       - name: 'Delete Dynamic Environment'
         env:
