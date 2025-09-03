@@ -23,14 +23,6 @@ on:
       environment:
         type: string
         required: true
-      region:
-        type: string
-        description: "Region"
-        required: true
-      region-name:
-        type: string
-        description: "The name of region"
-        required: true
       dynamic_environment:
         type: string
         description: "The name of dynamic environment"
@@ -43,8 +35,8 @@ jobs:
     steps:
       - name: Aprovar Mudanças
         run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
-        
-  rollback:
+
+  us_east_1_b:
     needs: [approve_job]
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
@@ -52,8 +44,6 @@ jobs:
       fail-fast: false
       matrix:
         file: ${{ fromJson(inputs.files_to_apply) }}
-        rregion: ${{ fromJson(inputs.region) }}
-        region-name: ${{ fromJson(inputs.region-name) }}
     steps:
       - name: Checkout Code at Correct Version
         uses: actions/checkout@v4
@@ -67,12 +57,64 @@ jobs:
       - name: validate 
         run: |
           echo "job finished"
-          echo "region: ${{ inputs.region }}"
-          echo "region-name: ${{ inputs.region-name }}"
+          echo "region: us-east-1_b"
+          echo "region-name: virginia"
+          echo "environment: config-us-east-1-stg"
+
+
+  us_east_1:
+    needs: [approve_job]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    strategy:
+      fail-fast: false
+      matrix:
+        file: ${{ fromJson(inputs.files_to_apply) }}
+    steps:
+      - name: Checkout Code at Correct Version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.stable_commit_sha }}
+
+      - uses: kong/setup-deck@v1
+        with:
+          deck-version: 1.47.1
+
+      - name: validate 
+        run: |
+          echo "job finished"
+          echo "region: us-east-1_b"
+          echo "region-name: virginia"
+          echo "environment: config-us-east-1-stg"
+
+  us_east_2:
+    needs: [approve_job]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    strategy:
+      fail-fast: false
+      matrix:
+        file: ${{ fromJson(inputs.files_to_apply) }}
+    steps:
+      - name: Checkout Code at Correct Version
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.stable_commit_sha }}
+
+      - uses: kong/setup-deck@v1
+        with:
+          deck-version: 1.47.1
+
+      - name: validate 
+        run: |
+          echo "job finished"
+          echo "region: us-east-1_b"
+          echo "region-name: virginia"
+          echo "environment: config-us-east-1-stg"
 
   create-revert-pr-manual:
     runs-on: ubuntu-latest
-    needs: [rollback]
+    needs: [us_east_1_b, us_east_1, us_east_2]
     permissions:
       contents: write
       pull-requests: write
@@ -83,7 +125,7 @@ jobs:
       with:
         token: ${{ secrets.GH_TOKEN }}
         ref: 'main'
-        fetch-depth: 2 # <-- MUDANÇA IMPORTANTE
+        fetch-depth: 2
 
     - name: 'Configurar Git'
       run: |

@@ -211,26 +211,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Conditional Sleep
-        run: sleep 1s
+        run: sleep 3s
 
-  trigger_rollback:
-    needs: [setup_environment, determine_environment, wait_time]
-    uses: ./.github/workflows/rollback.yml
-    with:
-      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
-      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
-      environment: asass
-      region: us-east-1
-      region-name: virginia
-      dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
-
-    secrets: inherit
+  # trigger_rollback:
+  #   needs: [setup_environment, determine_environment, wait_time]
+  #   uses: ./.github/workflows/rollback.yml
+  #   with:
+  #     files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+  #     stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+  #     pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
+  #     environment: config-us-east-1-stg
+  #     dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
+  #   secrets: inherit
 
   us_east_2:
-    needs: [setup_environment, determine_environment, us_east_1, trigger_rollback]
+    needs: [setup_environment, determine_environment, us_east_1]
     if: |
-      (needs.trigger_rollback.result == 'failure') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
@@ -243,15 +239,13 @@ jobs:
       pr_number: ${{ needs.setup_environment.outputs.pr_number }}
 
   trigger_rollback_2:
-    needs: [setup_environment, determine_environment, us_east_2]
+    needs: [setup_environment, determine_environment]
     uses: ./.github/workflows/rollback.yml
     with:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
-      environment: asass,bsbsbs
-      region: us-east-1,us-east-2
-      region-name: virginia,ohio
+      environment: config-us-east-1-stg
       dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
 
 
