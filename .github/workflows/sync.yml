@@ -120,7 +120,6 @@ jobs:
           echo "Files to Apply: ${{ steps.get_files.outputs.files }}"
 
   determine_environment:
-    name: Determinar Ambiente de Deploy
     needs: [setup_environment]
     runs-on: ubuntu-latest
     permissions:

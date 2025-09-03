@@ -45,6 +45,7 @@ jobs:
         run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
         
   rollback:
+    needs: [approve_job]
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     strategy:
