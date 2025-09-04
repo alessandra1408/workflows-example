@@ -227,9 +227,7 @@ jobs:
     secrets: inherit
 
   debug_rollback_result:
-    # Este job precisa rodar depois do trigger_rollback
     needs: [trigger_rollback]
-    # A condição 'always()' força este job a rodar, não importa se o anterior falhou, foi cancelado ou pulado.
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -241,7 +239,7 @@ jobs:
     needs: [setup_environment, determine_environment, us_east_1, trigger_rollback]
     if: |
       always() &&
-      (needs.trigger_rollback.result == 'cancelled') &&
+      (needs.trigger_rollback.result == 'failure') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
