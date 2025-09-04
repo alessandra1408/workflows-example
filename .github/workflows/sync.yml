@@ -224,8 +224,18 @@ jobs:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
       dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
-
     secrets: inherit
+
+  debug_rollback_result:
+    # Este job precisa rodar depois do trigger_rollback
+    needs: [trigger_rollback]
+    # A condição 'always()' força este job a rodar, não importa se o anterior falhou, foi cancelado ou pulado.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show Rollback Job Result
+        run: |
+          echo "O resultado REAL do job trigger_rollback é: '${{ needs.trigger_rollback.result }}'"
 
   us_east_2:
     needs: [setup_environment, determine_environment, us_east_1, trigger_rollback]
