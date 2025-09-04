@@ -240,6 +240,7 @@ jobs:
   us_east_2:
     needs: [setup_environment, determine_environment, us_east_1, trigger_rollback]
     if: |
+      always() &&
       (needs.trigger_rollback.result == 'cancelled') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
