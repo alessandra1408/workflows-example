@@ -4,6 +4,8 @@ permissions:
   contents: write
   pull-requests: write
   deployments: write
+  actions: read
+  
 
 on:
   workflow_call:

@@ -1,10 +1,12 @@
 name: TEST Push configs to Kong API GW on Staging (All Clusters)
 
 permissions:
-  contents: write
   pull-requests: write
+  contents: write
   actions: read
   deployments: write
+
+
 
 on:
   push:
