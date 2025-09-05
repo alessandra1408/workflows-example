@@ -226,15 +226,6 @@ jobs:
       dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
     secrets: inherit
 
-  debug_rollback_result:
-    needs: [trigger_rollback]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Show Rollback Job Result
-        run: |
-          echo "O resultado REAL do job trigger_rollback é: '${{ needs.trigger_rollback.result }}'"
-
   us_east_2:
     needs: [setup_environment, determine_environment, us_east_1, trigger_rollback]
     if: |
@@ -253,6 +244,10 @@ jobs:
 
   trigger_rollback_2:
     needs: [setup_environment, determine_environment, us_east_2]
+    if: |
+      always() &&
+      (needs.us_east_2.result == 'success') &&
+      (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/rollback.yml
     with:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
