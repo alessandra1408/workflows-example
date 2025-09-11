@@ -43,24 +43,36 @@ jobs:
         env: 
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
+          # Busca o PR associado ao commit. Pode retornar um array vazio.
           PR_DATA=$(gh pr list --search "${{ github.sha }}" --state merged --json number,author)
-          PR_NUMBER=$(echo "$PR_DATA" | jq '.[0].number')
-          PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.[0].author.login')
           
-          REVIEWS=$(gh pr view $PR_NUMBER --json reviews --jq '.reviews.[] | select(.state == "APPROVED") | .author.login')
-          APPROVAL_COUNT=$(echo "${REVIEWS}" | sort -u | wc -l)
-          
-          if (( $APPROVAL_COUNT >= 2 )); then
-            APPROVER_LOGIN=$PR_AUTHOR
-          else
+          # Verifica se algum PR foi encontrado
+          if [[ -z "$PR_DATA" || $(echo "$PR_DATA" | jq 'length') -eq 0 ]]; then
+            echo "Nenhum Pull Request associado a este commit foi encontrado. Usando o dono do repositório como aprovador."
             APPROVER_LOGIN=${{ github.repository_owner }}
+            PR_NUMBER="N/A"
+          else
+            # Extrai os dados do primeiro PR encontrado no array JSON
+            PR_NUMBER=$(echo "$PR_DATA" | jq '.[0].number')
+            PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.[0].author.login')
+            
+            # Conta o número de aprovações únicas no PR
+            REVIEWS=$(gh pr view $PR_NUMBER --json reviews --jq '.reviews.[] | select(.state == "APPROVED") | .author.login')
+            APPROVAL_COUNT=$(echo "${REVIEWS}" | sort -u | wc -l)
+            
+            if (( $APPROVAL_COUNT >= 2 )); then
+              APPROVER_LOGIN=$PR_AUTHOR
+              echo "PR teve $APPROVAL_COUNT aprovações. O autor do PR ($PR_AUTHOR) será o aprovador."
+            else
+              APPROVER_LOGIN=${{ github.repository_owner }}
+              echo "PR teve menos de 2 aprovações. O dono do repositório ($APPROVER_LOGIN) será o aprovador."
+            fi
           fi
 
-          echo "PR Number: ${PR_NUMBER}"
           echo "Final Approver for Gate: ${APPROVER_LOGIN}"
 
           echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
-          echo "approvers=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
+          echo "approver=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
 
       - name: '2. Get Stable Commit SHA'
         id: get_stable_sha
@@ -71,7 +83,7 @@ jobs:
       - name: show_outputs
         run: |
           echo "PR Number: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}"
-          echo "Approver: ${{ steps.get_pr_info_and_approver.outputs.approver }}"
+          echo "approver=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
           echo "Stable Commit SHA: ${{ steps.get_stable_sha.outputs.sha }}"
           echo "Files to Apply: ${{ steps.get_files.outputs.files }}"
 
