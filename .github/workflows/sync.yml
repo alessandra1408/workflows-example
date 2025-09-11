@@ -19,12 +19,12 @@ on:
       - "main"
 
 jobs:
-  setup_environment:
+  setup_outputs:
     runs-on: ubuntu-latest
     outputs:
+      approvers: ${{ steps.get_pr_info_and_approver.outputs.approvers }}
       pr_number: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}
       stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}
-      env_name: ${{ steps.create_env.outputs.env_name }}
       files_to_apply: ${{ steps.get_files.outputs.files }}
     steps:
       - name: Checkout código
@@ -60,153 +60,209 @@ jobs:
           echo "Final Approver for Gate: ${APPROVER_LOGIN}"
 
           echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
-          echo "approver=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
+          echo "approvers=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
 
       - name: '2. Get Stable Commit SHA'
         id: get_stable_sha
         run: |
           STABLE_SHA=$(git rev-parse HEAD~1)
           echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
-
-      - name: '3. Create/Setup Dynamic Environment Gate'
-        id: create_env
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          APPROVER: ${{ steps.get_pr_info_and_approver.outputs.approver }}
-          PR_NUMBER: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}
-        run: |
-          set -e
-          ENV_NAME="apply-pr-${PR_NUMBER}"
-          echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
           
-          # --- Busca e TRANSFORMA os aprovadores do 'tech-approve' ---
-          echo "Buscando e formatando aprovadores do ambiente 'tech-approve'..."
-          TECH_APPROVE_REVIEWERS_JSON=$(gh api "repos/${{ github.repository }}/environments/tech-approve" | \
-            jq '.protection_rules[] | select(.type == "required_reviewers") | .reviewers | map({type: .type, id: (if .type == "User" then .reviewer.id else .team.id end)})' || true)
-          # A linha acima com 'map({...})' é a correção crucial. Ela padroniza a saída.
-          
-          if [[ -z "$TECH_APPROVE_REVIEWERS_JSON" || "$TECH_APPROVE_REVIEWERS_JSON" == "null" ]]; then
-            TECH_APPROVE_REVIEWERS_JSON="[]"
-            echo "Nenhum aprovador encontrado em 'tech-approve'."
-          else
-            echo "Aprovadores de 'tech-approve' formatados com sucesso."
-          fi
-
-          # --- Prepara o objeto do aprovador do PR ---
-          echo "Buscando ID do autor do PR: ${APPROVER}"
-          USER_ID=$(gh api "users/${APPROVER}" | jq '.id')
-          PR_AUTHOR_REVIEWER_JSON=$(jq -n --argjson id "$USER_ID" '{type: "User", id: $id}')
-          
-          # --- Combina as listas (agora ambas no formato correto) ---
-          echo "Combinando aprovadores e removendo duplicatas..."
-          COMBINED_REVIEWERS_JSON=$(echo "$TECH_APPROVE_REVIEWERS_JSON" | jq ". + [$PR_AUTHOR_REVIEWER_JSON] | unique_by(.id)")
-
-          # --- Cria o payload final e atualiza o ambiente ---
-          FINAL_PAYLOAD=$(jq -n --argjson reviewers "$COMBINED_REVIEWERS_JSON" '{reviewers: $reviewers}')
-
-          echo "Configurando ambiente '${ENV_NAME}' com a seguinte lista de aprovadores:"
-          echo "$FINAL_PAYLOAD" | jq .
-
-          gh api \
-            --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" \
-            --input - <<< "${FINAL_PAYLOAD}"
-          
-          echo "Ambiente '${ENV_NAME}' criado/atualizado com sucesso."
-      
       - name: show_outputs
         run: |
           echo "PR Number: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}"
           echo "Approver: ${{ steps.get_pr_info_and_approver.outputs.approver }}"
           echo "Stable Commit SHA: ${{ steps.get_stable_sha.outputs.sha }}"
-          echo "Environment Name: ${{ steps.create_env.outputs.env_name }}"
           echo "Files to Apply: ${{ steps.get_files.outputs.files }}"
 
-  determine_environment:
-    needs: [setup_environment]
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
-      contents: read
-    outputs:
-      final_env: ${{ steps.decide_env.outputs.environment_name }}
-    steps:
-      - name: Checkout do código
-        uses: actions/checkout@v4
+  # setup_outputs:
+  #   runs-on: ubuntu-latest
+  #   outputs:
+  #     pr_number: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}
+  #     stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}
+  #     env_name: ${{ steps.create_env.outputs.env_name }}
+  #     files_to_apply: ${{ steps.get_files.outputs.files }}
+  #   steps:
+  #     - name: Checkout código
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 2
+    
+  #     - name: 'Get changed files'
+  #       id: get_files
+  #       run: |
+  #         content=$(git diff --name-only HEAD~1 HEAD | grep -E 'ca-certs/staging|...' | jq -R -s -c 'split("\n")[:-1]')
+  #         echo "files=${content}" >> $GITHUB_OUTPUT
 
-      - name: Verificar Aprovadores e Definir Ambiente
-        id: decide_env
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-
-          PR_NUMBER=${{needs.setup_environment.outputs.pr_number}}
-
-          echo "PR encontrado: #${PR_NUMBER}"
-
-          echo "Listando aprovadores para o PR #${PR_NUMBER}..."
-          APPROVER_LIST=$(gh pr view $PR_NUMBER --json reviews --jq '.reviews.[] | select(.state == "APPROVED") | .author.login' | sort -u)
-          if [ -z "$APPROVER_LIST" ]; then
-            echo "Nenhum aprovador encontrado."
-            APPROVER_LIST=""
-          else
-            echo "Aprovadores encontrados:"
-            echo "$APPROVER_LIST"
-          fi
-
-          echo "Listando proprietários do repositório..."
-          REPO_OWNER_TYPE=$(gh repo view ${{ github.repository }} --json owner --jq '.owner.type')
+  #     - name: '1. Get PR Info & Determine Approver'
+  #       id: get_pr_info_and_approver
+  #       env: 
+  #         GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  #       run: |
+  #         PR_DATA=$(gh pr list --search "${{ github.sha }}" --state merged --json number,author)
+  #         PR_NUMBER=$(echo "$PR_DATA" | jq '.[0].number')
+  #         PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.[0].author.login')
           
-          if [[ "$REPO_OWNER_TYPE" == "Organization" ]]; then
-            echo "Repositório de Organização. Lendo .github/CODEOWNERS..."
+  #         REVIEWS=$(gh pr view $PR_NUMBER --json reviews --jq '.reviews.[] | select(.state == "APPROVED") | .author.login')
+  #         APPROVAL_COUNT=$(echo "${REVIEWS}" | sort -u | wc -l)
+          
+  #         if (( $APPROVAL_COUNT >= 2 )); then
+  #           APPROVER_LOGIN=$PR_AUTHOR
+  #         else
+  #           APPROVER_LOGIN=${{ github.repository_owner }}
+  #         fi
+
+  #         echo "PR Number: ${PR_NUMBER}"
+  #         echo "Final Approver for Gate: ${APPROVER_LOGIN}"
+
+  #         echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+  #         echo "approver=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
+
+  #     - name: '2. Get Stable Commit SHA'
+  #       id: get_stable_sha
+  #       run: |
+  #         STABLE_SHA=$(git rev-parse HEAD~1)
+  #         echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
+
+  #     - name: '3. Create/Setup Dynamic Environment Gate'
+  #       id: create_env
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  #         APPROVER: ${{ steps.get_pr_info_and_approver.outputs.approver }}
+  #         PR_NUMBER: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}
+  #       run: |
+  #         set -e
+  #         ENV_NAME="apply-pr-${PR_NUMBER}"
+  #         echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
+          
+  #         # --- Busca e TRANSFORMA os aprovadores do 'tech-approve' ---
+  #         echo "Buscando e formatando aprovadores do ambiente 'tech-approve'..."
+  #         TECH_APPROVE_REVIEWERS_JSON=$(gh api "repos/${{ github.repository }}/environments/tech-approve" | \
+  #           jq '.protection_rules[] | select(.type == "required_reviewers") | .reviewers | map({type: .type, id: (if .type == "User" then .reviewer.id else .team.id end)})' || true)
+  #         # A linha acima com 'map({...})' é a correção crucial. Ela padroniza a saída.
+          
+  #         if [[ -z "$TECH_APPROVE_REVIEWERS_JSON" || "$TECH_APPROVE_REVIEWERS_JSON" == "null" ]]; then
+  #           TECH_APPROVE_REVIEWERS_JSON="[]"
+  #           echo "Nenhum aprovador encontrado em 'tech-approve'."
+  #         else
+  #           echo "Aprovadores de 'tech-approve' formatados com sucesso."
+  #         fi
+
+  #         # --- Prepara o objeto do aprovador do PR ---
+  #         echo "Buscando ID do autor do PR: ${APPROVER}"
+  #         USER_ID=$(gh api "users/${APPROVER}" | jq '.id')
+  #         PR_AUTHOR_REVIEWER_JSON=$(jq -n --argjson id "$USER_ID" '{type: "User", id: $id}')
+          
+  #         # --- Combina as listas (agora ambas no formato correto) ---
+  #         echo "Combinando aprovadores e removendo duplicatas..."
+  #         COMBINED_REVIEWERS_JSON=$(echo "$TECH_APPROVE_REVIEWERS_JSON" | jq ". + [$PR_AUTHOR_REVIEWER_JSON] | unique_by(.id)")
+
+  #         # --- Cria o payload final e atualiza o ambiente ---
+  #         FINAL_PAYLOAD=$(jq -n --argjson reviewers "$COMBINED_REVIEWERS_JSON" '{reviewers: $reviewers}')
+
+  #         echo "Configurando ambiente '${ENV_NAME}' com a seguinte lista de aprovadores:"
+  #         echo "$FINAL_PAYLOAD" | jq .
+
+  #         gh api \
+  #           --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" \
+  #           --input - <<< "${FINAL_PAYLOAD}"
+          
+  #         echo "Ambiente '${ENV_NAME}' criado/atualizado com sucesso."
+      
+  #     - name: show_outputs
+  #       run: |
+  #         echo "PR Number: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}"
+  #         echo "Approver: ${{ steps.get_pr_info_and_approver.outputs.approver }}"
+  #         echo "Stable Commit SHA: ${{ steps.get_stable_sha.outputs.sha }}"
+  #         echo "Environment Name: ${{ steps.create_env.outputs.env_name }}"
+  #         echo "Files to Apply: ${{ steps.get_files.outputs.files }}"
+
+  # determine_environment:
+  #   needs: [setup_outputs]
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     pull-requests: read
+  #     contents: read
+  #   outputs:
+  #     final_env: ${{ steps.decide_env.outputs.environment_name }}
+  #   steps:
+  #     - name: Checkout do código
+  #       uses: actions/checkout@v4
+
+  #     - name: Verificar Aprovadores e Definir Ambiente
+  #       id: decide_env
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       run: |
+  #         set -e
+
+  #         PR_NUMBER=${{needs.setup_outputs.outputs.pr_number}}
+
+  #         echo "PR encontrado: #${PR_NUMBER}"
+
+  #         echo "Listando aprovadores para o PR #${PR_NUMBER}..."
+  #         APPROVER_LIST=$(gh pr view $PR_NUMBER --json reviews --jq '.reviews.[] | select(.state == "APPROVED") | .author.login' | sort -u)
+  #         if [ -z "$APPROVER_LIST" ]; then
+  #           echo "Nenhum aprovador encontrado."
+  #           APPROVER_LIST=""
+  #         else
+  #           echo "Aprovadores encontrados:"
+  #           echo "$APPROVER_LIST"
+  #         fi
+
+  #         echo "Listando proprietários do repositório..."
+  #         REPO_OWNER_TYPE=$(gh repo view ${{ github.repository }} --json owner --jq '.owner.type')
+          
+  #         if [[ "$REPO_OWNER_TYPE" == "Organization" ]]; then
+  #           echo "Repositório de Organização. Lendo .github/CODEOWNERS..."
             
-            CODEOWNERS_FILE_PATH=".github/CODEOWNERS"
-            if [ ! -f "$CODEOWNERS_FILE_PATH" ]; then
-              echo "::error::Arquivo CODEOWNERS não encontrado no caminho esperado: ${CODEOWNERS_FILE_PATH}."
-              exit 1
-            fi
+  #           CODEOWNERS_FILE_PATH=".github/CODEOWNERS"
+  #           if [ ! -f "$CODEOWNERS_FILE_PATH" ]; then
+  #             echo "::error::Arquivo CODEOWNERS não encontrado no caminho esperado: ${CODEOWNERS_FILE_PATH}."
+  #             exit 1
+  #           fi
 
-            OWNER_TEAM_WITH_AT=$(grep '^*' "$CODEOWNERS_FILE_PATH" | grep -oE '@[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+' | head -n 1)
-            if [ -z "$OWNER_TEAM_WITH_AT" ]; then
-                echo "::error::Não foi possível encontrar um time proprietário padrão (ex: '* @org/time') no arquivo CODEOWNERS."
-                exit 1
-            fi
+  #           OWNER_TEAM_WITH_AT=$(grep '^*' "$CODEOWNERS_FILE_PATH" | grep -oE '@[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+' | head -n 1)
+  #           if [ -z "$OWNER_TEAM_WITH_AT" ]; then
+  #               echo "::error::Não foi possível encontrar um time proprietário padrão (ex: '* @org/time') no arquivo CODEOWNERS."
+  #               exit 1
+  #           fi
             
-            OWNER_TEAM_SLUG="${OWNER_TEAM_WITH_AT#@}"
-            echo "Time proprietário extraído do CODEOWNERS: ${OWNER_TEAM_SLUG}"
+  #           OWNER_TEAM_SLUG="${OWNER_TEAM_WITH_AT#@}"
+  #           echo "Time proprietário extraído do CODEOWNERS: ${OWNER_TEAM_SLUG}"
 
-            OWNER_LIST=$(gh api "orgs/${{ github.repository_owner }}/teams/${OWNER_TEAM_SLUG}/members" --jq '.[].login')
-          else
-            echo "Repositório Pessoal. O proprietário é o dono do repositório."
-            OWNER_LIST="${{ github.repository_owner }}"
-          fi
-          echo "Lista final de proprietários:"
-          echo "$OWNER_LIST"
+  #           OWNER_LIST=$(gh api "orgs/${{ github.repository_owner }}/teams/${OWNER_TEAM_SLUG}/members" --jq '.[].login')
+  #         else
+  #           echo "Repositório Pessoal. O proprietário é o dono do repositório."
+  #           OWNER_LIST="${{ github.repository_owner }}"
+  #         fi
+  #         echo "Lista final de proprietários:"
+  #         echo "$OWNER_LIST"
 
-          echo "Comparando listas..."
-          OWNER_APPROVER_COUNT=$(echo "${APPROVER_LIST}" | grep -F -x -f <(echo "${OWNER_LIST}") | wc -l)
-          echo "Número de aprovadores que também são proprietários: ${OWNER_APPROVER_COUNT}"
+  #         echo "Comparando listas..."
+  #         OWNER_APPROVER_COUNT=$(echo "${APPROVER_LIST}" | grep -F -x -f <(echo "${OWNER_LIST}") | wc -l)
+  #         echo "Número de aprovadores que também são proprietários: ${OWNER_APPROVER_COUNT}"
 
-          if (( $OWNER_APPROVER_COUNT >= 2 )); then
-            FINAL_ENV=${{needs.setup_environment.outputs.env_name}}
-            echo "Decisão: Pelo menos 2 proprietários aprovaram. Selecionando ambiente '${FINAL_ENV}'."
-          else
-            FINAL_ENV=tech-approve
-            echo "Decisão: Menos de 2 proprietários aprovaram. Selecionando ambiente '${FINAL_ENV}'."
-          fi
+  #         if (( $OWNER_APPROVER_COUNT >= 2 )); then
+  #           FINAL_ENV=${{needs.setup_outputs.outputs.env_name}}
+  #           echo "Decisão: Pelo menos 2 proprietários aprovaram. Selecionando ambiente '${FINAL_ENV}'."
+  #         else
+  #           FINAL_ENV=tech-approve
+  #           echo "Decisão: Menos de 2 proprietários aprovaram. Selecionando ambiente '${FINAL_ENV}'."
+  #         fi
 
-          echo "environment_name=${FINAL_ENV}" >> $GITHUB_OUTPUT
+  #         echo "environment_name=${FINAL_ENV}" >> $GITHUB_OUTPUT
 
   us_east_1:
-    needs: [setup_environment, determine_environment]
+    needs: [setup_outputs]
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-1
       region-name: virginia
       environment: config-us-east-1-stg
-      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
-      pr_number: ${{ needs.setup_environment.outputs.pr_number }}
+      stable_commit_sha: ${{ needs.setup_outputs.outputs.stable_commit_sha }}
+      pr_number: ${{ needs.setup_outputs.outputs.pr_number }}
+      approvers: ${{ needs.setup_outputs.outputs.approvers }}
 
   wait_time:
     needs: [us_east_1]
@@ -216,60 +272,60 @@ jobs:
         run: sleep 1s
 
   trigger_rollback:
-    needs: [setup_environment, determine_environment, wait_time]
+    needs: [setup_outputs, wait_time]
     uses: ./.github/workflows/rollback.yml
     with:
       region: us-east-1
       region-name: virginia
       environment: asass
-      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
-      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
-      dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
+      files_to_apply: ${{ needs.setup_outputs.outputs.files_to_apply }}
+      stable_commit_sha: ${{ needs.setup_outputs.outputs.stable_commit_sha }}
+      pr_number_to_revert: ${{ needs.setup_outputs.outputs.pr_number }}
+      approvers: ${{ needs.setup_outputs.outputs.approvers }}
     secrets: inherit
 
   us_east_2:
-    needs: [setup_environment, determine_environment, us_east_1, trigger_rollback]
+    needs: [setup_outputs, us_east_1, trigger_rollback]
     if: |
       always() &&
       (needs.trigger_rollback.result == 'failure') &&
       (needs.us_east_1.result == 'success') &&
-      (needs.setup_environment.result == 'success')
+      (needs.setup_outputs.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-1
       region-name: virginia
       environment: config-us-east-2-stg
-      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
-      pr_number: ${{ needs.setup_environment.outputs.pr_number }}
+      stable_commit_sha: ${{ needs.setup_outputs.outputs.stable_commit_sha }}
+      pr_number: ${{ needs.setup_outputs.outputs.pr_number }}
+      approvers: ${{ needs.setup_outputs.outputs.approvers }}
+
 
   trigger_rollback_2:
-    needs: [setup_environment, determine_environment, us_east_2]
+    needs: [setup_outputs, us_east_2]
     if: |
       always() &&
       (needs.us_east_2.result == 'success') &&
-      (needs.setup_environment.result == 'success')
+      (needs.setup_outputs.result == 'success')
     uses: ./.github/workflows/rollback.yml
     with:
-      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
-      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
+      files_to_apply: ${{ needs.setup_outputs.outputs.files_to_apply }}
+      stable_commit_sha: ${{ needs.setup_outputs.outputs.stable_commit_sha }}
+      pr_number_to_revert: ${{ needs.setup_outputs.outputs.pr_number }}
       environment: asass,bsbsbs
       region: us-east-1,us-east-2
       region-name: virginia,ohio
-      dynamic_environment: ${{ needs.determine_environment.outputs.final_env }}
+      approvers: ${{ needs.setup_outputs.outputs.approvers }}
 
-
-  cleanup-environment:
-    runs-on: ubuntu-latest
-    if: always()
-    needs: [setup_environment, us_east_2, trigger_rollback_2]
-    steps:
-      - name: 'Delete Dynamic Environment'
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          ENV_NAME: ${{ needs.setup_environment.outputs.env_name }}
-        run: |
-          echo "Limpando o ambiente de decisão: ${ENV_NAME}"
-          gh api --method DELETE "repos/${{ github.repository }}/environments/${ENV_NAME}"
+  # cleanup-environment:
+  #   runs-on: ubuntu-latest
+  #   if: always()
+  #   needs: [setup_outputs, us_east_2, trigger_rollback_2]
+  #   steps:
+  #     - name: 'Delete Dynamic Environment'
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  #         ENV_NAME: ${{ needs.setup_outputs.outputs.env_name }}
+  #       run: |
+  #         echo "Limpando o ambiente de decisão: ${ENV_NAME}"
+  #         gh api --method DELETE "repos/${{ github.repository }}/environments/${ENV_NAME}"

@@ -22,10 +22,6 @@ on:
         type: string
         description: "The name of environment"
         required: true
-      dynamic_environment:
-        type: string
-        description: "The name of dynamic environment"
-        required: true
       files_override:
         type: string
         required: false
@@ -38,6 +34,10 @@ on:
         type: string
         description: "Número do PR associado"
         required: false
+      approvers:
+        type: string
+        description: "Lista de aprovadores"
+        required: true
 
 jobs:
   start_job:
@@ -82,13 +82,26 @@ jobs:
             echo "files=${{ needs.filesChanged.outputs.files }}" >> $GITHUB_OUTPUT
           fi
 
+  # approve:
+  #   runs-on: ubuntu-latest
+  #   needs: [select-files]
+  #   steps:
+  #     - name: Aprovar Mudanças
+  #       run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
+
+      
   approve:
     runs-on: ubuntu-latest
     needs: [select-files]
-    environment: ${{ inputs.dynamic_environment }}
     steps:
-      - name: Aprovar Mudanças
-        run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
+      - name: Aprovação manual para deploy
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: ${{ inputs.approvers }}
+          minimum-approvals: 1
+          issue-title: "Aprovação de Apply para Produção"
+          issue-body: "Por favor, aprove o apply da branch `main` para ${{inputs.region}}."
 
   apply:
     runs-on: ubuntu-latest

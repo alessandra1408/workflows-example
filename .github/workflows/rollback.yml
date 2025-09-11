@@ -32,18 +32,31 @@ on:
         type: string
         description: "The name of region"
         required: true
-      dynamic_environment:
+      approvers:
         type: string
-        description: "The name of dynamic environment"
+        description: "Lista de aprovadores"
         required: true
 
 jobs:
+  # approve_job:
+  #   runs-on: ubuntu-latest
+  #   environment: ${{inputs.dynamic_environment}}
+  #   steps:
+  #     - name: Aprovar Mudanças
+  #       run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
+
+
   approve_job:
     runs-on: ubuntu-latest
-    environment: ${{inputs.dynamic_environment}}
     steps:
-      - name: Aprovar Mudanças
-        run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
+      - name: Aprovação manual para deploy
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: ${{ inputs.approvers }}
+          minimum-approvals: 1
+          issue-title: "Aprovação de Apply para Produção"
+          issue-body: "Por favor, aprove o apply da branch `main` para ${{inputs.region}}."
         
 
   prepare-matrix:
@@ -101,7 +114,7 @@ jobs:
       with:
         token: ${{ secrets.GH_TOKEN }}
         ref: 'main'
-        fetch-depth: 2 # <-- MUDANÇA IMPORTANTE
+        fetch-depth: 2
 
     - name: 'Configurar Git'
       run: |
