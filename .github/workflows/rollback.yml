@@ -73,8 +73,8 @@ jobs:
           region=$(echo '${{ inputs.region }}' | jq -R 'split(",")' | jq -c .)
           echo "matrix=$region" >> $GITHUB_OUTPUT
 
-          region-name=$(echo '${{ inputs.region-name }}' | jq -R 'split(",")' | jq -c .)
-          echo "region-name=$region-name" >> $GITHUB_OUTPUT
+          region_name=$(echo '${{ inputs.region-name }}' | jq -R 'split(",")' | jq -c .)
+          echo "region-name=$region_name" >> $GITHUB_OUTPUT
 
   rollback:
     needs: [prepare-matrix]
