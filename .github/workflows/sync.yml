@@ -72,7 +72,7 @@ jobs:
           echo "Final Approver for Gate: ${APPROVER_LOGIN}"
 
           echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
-          echo "approver=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
+          echo "approvers=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
 
       - name: '2. Get Stable Commit SHA'
         id: get_stable_sha
@@ -83,7 +83,7 @@ jobs:
       - name: show_outputs
         run: |
           echo "PR Number: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}"
-          echo "approver=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
+          echo "approvers: ${{ steps.get_pr_info_and_approver.outputs.approvers }}"
           echo "Stable Commit SHA: ${{ steps.get_stable_sha.outputs.sha }}"
           echo "Files to Apply: ${{ steps.get_files.outputs.files }}"
 
