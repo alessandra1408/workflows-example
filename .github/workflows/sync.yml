@@ -5,6 +5,7 @@ permissions:
   contents: write
   actions: read
   deployments: write
+  issues: write
 
 
 
