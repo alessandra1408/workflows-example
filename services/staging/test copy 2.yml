@@ -1,0 +1,167 @@
+_format_version: "3.0"
+_info:
+  defaults: {}
+  select_tags:
+    - payment-card-cancel-api
+upstreams:
+  - name: payment-card-cancel-api-upstream
+    algorithm: round-robin
+    healthchecks:
+      threshold: 0
+      active:
+        type: https
+        http_path: /health_check/live
+        timeout: 3
+        concurrency: 10
+        healthy:
+          successes: 3
+          interval: 0
+          http_statuses:
+            - 200
+        unhealthy:
+          http_failures: 3
+          interval: 0
+          http_statuses:
+            - 500
+            - 501
+            - 502
+            - 503
+            - 504
+            - 505
+    targets:
+      - id: f62cd640-c4b1-4ef0-bfc6-64304f4fe6fa
+        target: payment-card-cancel-api.karavela-shared-pci-stg.aws.karavela.run:443
+        weight: 9999
+      - id: c2b7859e-4acf-4faf-9de9-abe046fde481
+        target: payment-card-api.karavela-shared-pci-stg.aws.karavela.run:443
+        weight: 1
+      - id: ffc2cd86-21cd-4319-b2fc-54e21b01ff48
+        target: payment-card-api.stg.pagarme.net:443
+        weight: 0
+services:
+  - name: payment-card-cancel-api
+    enabled: true
+    host: payment-card-cancel-api-upstream
+    protocol: https
+    plugins:
+      - name: kong-plugin-gzip
+        enabled: true
+        protocols:
+          - http
+        config:
+          unzip_request: true
+          zip_response: true
+    routes:
+      - name: payment-card-cancel-api-healthcheck
+        protocols:
+          - http
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        paths:
+          - /health_check
+        methods:
+          - GET
+        strip_path: false
+      - name: payment-card-cancel-api-v1-cancel
+        protocols:
+          - http
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        paths:
+          - ~/v1/charges?/cancel
+        methods:
+          - POST
+        strip_path: false
+        plugins:
+          - name: url-rewrite
+            enabled: true
+            protocols:
+              - http
+            config:
+              url: /v1/charge/cancel
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              header-keys:
+                - Authorization
+              bypass-if-headers:
+                - provider-key
+              iss-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              policy-key: null
+      - name: payment-card-cancel-api-v1-cancel-by-id
+        protocols:
+          - http
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        paths:
+          - ~/v1/charges?/(?<charge_id>\S+)/cancel
+        methods:
+          - POST
+        strip_path: false
+        plugins:
+          - name: url-rewrite
+            enabled: true
+            protocols:
+              - http
+            config:
+              url: /v1/charge/<charge_id>/cancel
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              header-keys:
+                - Authorization
+              bypass-if-headers:
+                - provider-key
+              iss-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2
+              jwk-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2/.well-known/jwks.json
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              policy-key: null
+      - name: payment-card-cancel-api-v1-void
+        protocols:
+          - http
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        paths:
+          - ~/v1/charges?/void
+        methods:
+          - POST
+        strip_path: false
+        plugins:
+          - name: url-rewrite
+            enabled: true
+            protocols:
+              - http
+            config:
+              url: /v1/charge/void
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              header-keys:
+                - Authorization
+              bypass-if-headers:
+                - provider-key
+              iss-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              policy-key: null
+    tags:
+      - payment-card-cancel-api

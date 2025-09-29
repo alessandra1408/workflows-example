@@ -1,0 +1,51 @@
+name: Route Conflict Check
+
+on:
+  pull_request:
+    paths:
+      - "services/staging/*.yml"
+      - "services/production/*.yml"
+      - "plugins/staging/*.yml"
+      - "plugins/production/*.yml"
+    branches:
+      - "main"
+
+
+jobs:
+  route-conflict-check:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed service files
+        id: changed
+        run: |
+          content=$(git diff --name-only origin/${GITHUB_BASE_REF}...HEAD \
+                    | grep -E '^services/.*\.ya?ml$' \
+                    | sed '/^$/d' \
+                    | jq -R -s -c 'split("\n")')
+          echo "files=${content}" >> $GITHUB_OUTPUT
+          echo "Changed service files: $content"
+
+      - name: Run route conflict analyzer
+        if: steps.changed.outputs.files != '[]'
+        run: |
+          echo "Running conflict check for files: ${{ steps.changed.outputs.files }}"
+          node scripts/check-routes.js "${{ steps.changed.outputs.files }}"
+
+      - name: Comment on PR if conflict found
+        if: failure()
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: route-conflicts
+          message: |
+            ⚠️ **Route Conflict Detected**
+            O analisador encontrou sobreposição de rotas/regex/host.
+            Verifique o log do job para detalhes.
