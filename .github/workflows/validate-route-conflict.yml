@@ -10,42 +10,76 @@ on:
     branches:
       - "main"
 
-
 jobs:
   route-conflict-check:
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-      contents: read
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Install yq
+        run: sudo snap install yq
+
       - name: Get changed service files
         id: changed
         run: |
           content=$(git diff --name-only origin/${GITHUB_BASE_REF}...HEAD \
                     | grep -E '^services/.*\.ya?ml$' \
-                    | sed '/^$/d' \
-                    | jq -R -s -c 'split("\n")')
-          echo "files=${content}" >> $GITHUB_OUTPUT
+                    | sed '/^$/d')
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$content" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
           echo "Changed service files: $content"
 
-      - name: Run route conflict analyzer
-        if: steps.changed.outputs.files != '[]'
+      - name: Build JSON of all routes
+        id: build_routes
         run: |
-          echo "Running conflict check for files: ${{ steps.changed.outputs.files }}"
-          node scripts/check-routes.js "${{ steps.changed.outputs.files }}"
+          all=$(for f in services/*.yml; do
+                   yq -o=json e '{"file": strenv(f), "host": .host, "path": .path}' "$f"
+                 done | jq -s .)
+          echo "all_routes=$all" >> $GITHUB_OUTPUT
 
-      - name: Comment on PR if conflict found
-        if: failure()
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: route-conflicts
-          message: |
-            ⚠️ **Route Conflict Detected**
-            O analisador encontrou sobreposição de rotas/regex/host.
-            Verifique o log do job para detalhes.
+          new=$(for f in ${{ steps.changed.outputs.files }}; do
+                   yq -o=json e '{"file": strenv(f), "host": .host, "path": .path}' "$f"
+                 done | jq -s .)
+          echo "new_routes=$new" >> $GITHUB_OUTPUT
+
+      - name: Check for conflicts
+        run: |
+          all='${{ steps.build_routes.outputs.all_routes }}'
+          new='${{ steps.build_routes.outputs.new_routes }}'
+
+          conflict=0
+
+          # Percorre cada rota alterada
+          echo "$new" | jq -c '.[]' | while read nr; do
+            nfile=$(echo "$nr" | jq -r .file)
+            nhost=$(echo "$nr" | jq -r .host)
+            npath=$(echo "$nr" | jq -r .path)
+
+            # Compara contra todas as rotas já existentes
+            echo "$all" | jq -c '.[]' | while read er; do
+              efile=$(echo "$er" | jq -r .file)
+              ehost=$(echo "$er" | jq -r .host)
+              epath=$(echo "$er" | jq -r .path)
+
+              if [ "$efile" = "$nfile" ]; then
+                continue # ignora se for o mesmo arquivo
+              fi
+
+              if [ "$nhost" = "$ehost" ]; then
+                if [[ "$npath" =~ $epath ]]; then
+                  echo "⚠️ Conflito detectado: $nfile (host=$nhost path=$npath) colide com $efile (host=$ehost path=$epath)"
+                  conflict=1
+                fi
+              fi
+            done
+          done
+
+          if [ $conflict -eq 1 ]; then
+            exit 1
+          else
+            echo "✅ Nenhum conflito detectado."
+          fi
