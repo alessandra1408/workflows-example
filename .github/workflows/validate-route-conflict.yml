@@ -19,8 +19,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install yq
-        run: sudo snap install yq
+      - name: Install dependencies
+        run: sudo snap install yq jq
 
       - name: Get changed service files
         id: changed
@@ -36,45 +36,62 @@ jobs:
       - name: Build JSON of all routes
         id: build_routes
         run: |
-          all=$(for f in services/*.yml; do
-                   yq -o=json e '{"file": strenv(f), "host": .host, "path": .path}' "$f"
-                 done | jq -s .)
+          # Monta lista de todas as rotas (staging + production)
+          all=$(find services -type f -name '*.yml' | while read f; do
+            yq -o=json e '{"file": strenv(f), "hosts": .hosts, "paths": .paths}' "$f"
+          done | jq -s .)
           echo "all_routes=$all" >> $GITHUB_OUTPUT
 
-          new=$(for f in ${{ steps.changed.outputs.files }}; do
-                   yq -o=json e '{"file": strenv(f), "host": .host, "path": .path}' "$f"
-                 done | jq -s .)
+          # Monta lista das rotas alteradas
+          new=$(echo "${{ steps.changed.outputs.files }}" | tr ' ' '\n' | while read f; do
+            yq -o=json e '{"file": strenv(f), "hosts": .hosts, "paths": .paths}' "$f"
+          done | jq -s .)
           echo "new_routes=$new" >> $GITHUB_OUTPUT
 
       - name: Check for conflicts
         run: |
           all='${{ steps.build_routes.outputs.all_routes }}'
           new='${{ steps.build_routes.outputs.new_routes }}'
-
           conflict=0
 
-          # Percorre cada rota alterada
+          # Para cada rota alterada
           echo "$new" | jq -c '.[]' | while read nr; do
             nfile=$(echo "$nr" | jq -r .file)
-            nhost=$(echo "$nr" | jq -r .host)
-            npath=$(echo "$nr" | jq -r .path)
 
-            # Compara contra todas as rotas já existentes
+            # Hosts e paths como arrays
+            nhosts=$(echo "$nr" | jq -c '.hosts[]')
+            npaths=$(echo "$nr" | jq -c '.paths[]')
+
+            # Compara contra todas as rotas existentes
             echo "$all" | jq -c '.[]' | while read er; do
               efile=$(echo "$er" | jq -r .file)
-              ehost=$(echo "$er" | jq -r .host)
-              epath=$(echo "$er" | jq -r .path)
-
-              if [ "$efile" = "$nfile" ]; then
-                continue # ignora se for o mesmo arquivo
+              # Ignora mesmo arquivo
+              if [[ "$efile" == "$nfile" ]]; then
+                continue
               fi
 
-              if [ "$nhost" = "$ehost" ]; then
-                if [[ "$npath" =~ $epath ]]; then
-                  echo "⚠️ Conflito detectado: $nfile (host=$nhost path=$npath) colide com $efile (host=$ehost path=$epath)"
-                  conflict=1
-                fi
-              fi
+              ehosts=$(echo "$er" | jq -c '.hosts[]')
+              epaths=$(echo "$er" | jq -c '.paths[]')
+
+              # Checa host e path
+              for nh in $nhosts; do
+                nh=$(echo "$nh" | tr -d '"')
+                for eh in $ehosts; do
+                  eh=$(echo "$eh" | tr -d '"')
+                  if [[ "$nh" == "$eh" ]]; then
+                    for np in $npaths; do
+                      np=$(echo "$np" | tr -d '"')
+                      for ep in $epaths; do
+                        ep=$(echo "$ep" | tr -d '"')
+                        if [[ "$np" =~ $ep ]]; then
+                          echo "⚠️ Conflito detectado: $nfile (host=$nh path=$np) colide com $efile (host=$eh path=$ep)"
+                          conflict=1
+                        fi
+                      done
+                    done
+                  fi
+                done
+              done
             done
           done
 
