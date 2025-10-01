@@ -13,7 +13,7 @@ on:
       - "main"
 
 jobs:
-   route-conflict-check:
+  route-conflict-check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -24,14 +24,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20' # Use uma versão LTS do Node.js
           cache: 'npm'
           cache-dependency-path: '.github/scripts/package.json'
 
-      - name: Clear npm cache
-        run: npm cache clean --force
-
       - name: Install Node.js dependencies
+        # O --prefix garante que o npm rode dentro da pasta de scripts
         run: npm --prefix .github/scripts install
 
       - name: Get changed service files
