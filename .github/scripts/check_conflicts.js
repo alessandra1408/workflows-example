@@ -57,12 +57,10 @@ function checkConflict(path1, path2) {
     const isRegex1 = path1.startsWith('~');
     const isRegex2 = path2.startsWith('~');
 
-    // ✅✅✅ CORREÇÃO APLICADA AQUI ✅✅✅
-    // Função auxiliar para remover sintaxes não suportadas, como "named capture groups"
     const normalizeRegex = (str) => str.replace(/\(\?<[^>]+>/g, '(');
 
-    const path1Clean = isRegex1 ? normalizeRegex(path1.substring(1)) : path1;
-    const path2Clean = isRegex2 ? normalizeRegex(path2.substring(1)) : path2;
+    let path1Clean = isRegex1 ? normalizeRegex(path1.substring(1)) : path1;
+    let path2Clean = isRegex2 ? normalizeRegex(path2.substring(1)) : path2;
 
     // Caso 1: Ambos são literais
     if (!isRegex1 && !isRegex2) {
@@ -71,19 +69,22 @@ function checkConflict(path1, path2) {
 
     // Caso 2: Um é literal e o outro é regex
     if (isRegex1 && !isRegex2) {
-        // Usamos o regex normalizado para o teste
         return new RegExp(`^${path1Clean}$`).test(path2);
     }
     if (!isRegex1 && isRegex2) {
-        // Usamos o regex normalizado para o teste
         return new RegExp(`^${path2Clean}$`).test(path1);
     }
     
     // Caso 3: Ambos são regex
     if (isRegex1 && isRegex2) {
         try {
-            const re1 = regexpTree.parse(`/${path1Clean}/`);
-            const re2 = regexpTree.parse(`/${path2Clean}/`);
+            // ✅✅✅ CORREÇÃO APLICADA AQUI ✅✅✅
+            // Escapa as barras "/" para que o parser do regexp-tree não se confunda
+            const escapedPath1 = path1Clean.replace(/\//g, '\\/');
+            const escapedPath2 = path2Clean.replace(/\//g, '\\/');
+
+            const re1 = regexpTree.parse(`/${escapedPath1}/`);
+            const re2 = regexpTree.parse(`/${escapedPath2}/`);
             
             const intersection = regexpTree.intersect(re1, re2);
             
