@@ -57,8 +57,12 @@ function checkConflict(path1, path2) {
     const isRegex1 = path1.startsWith('~');
     const isRegex2 = path2.startsWith('~');
 
-    const path1Clean = isRegex1 ? path1.substring(1) : path1;
-    const path2Clean = isRegex2 ? path2.substring(1) : path2;
+    // ✅✅✅ CORREÇÃO APLICADA AQUI ✅✅✅
+    // Função auxiliar para remover sintaxes não suportadas, como "named capture groups"
+    const normalizeRegex = (str) => str.replace(/\(\?<[^>]+>/g, '(');
+
+    const path1Clean = isRegex1 ? normalizeRegex(path1.substring(1)) : path1;
+    const path2Clean = isRegex2 ? normalizeRegex(path2.substring(1)) : path2;
 
     // Caso 1: Ambos são literais
     if (!isRegex1 && !isRegex2) {
@@ -67,26 +71,25 @@ function checkConflict(path1, path2) {
 
     // Caso 2: Um é literal e o outro é regex
     if (isRegex1 && !isRegex2) {
+        // Usamos o regex normalizado para o teste
         return new RegExp(`^${path1Clean}$`).test(path2);
     }
     if (!isRegex1 && isRegex2) {
+        // Usamos o regex normalizado para o teste
         return new RegExp(`^${path2Clean}$`).test(path1);
     }
     
-    // ✅✅✅ CORREÇÃO APLICADA AQUI ✅✅✅
-    // Caso 3: Ambos são regex (usando a nova biblioteca 'regexp-tree')
+    // Caso 3: Ambos são regex
     if (isRegex1 && isRegex2) {
         try {
-            // A biblioteca espera o formato /regex/ para análise
             const re1 = regexpTree.parse(`/${path1Clean}/`);
             const re2 = regexpTree.parse(`/${path2Clean}/`);
             
             const intersection = regexpTree.intersect(re1, re2);
             
-            // Verifica se a interseção resulta em uma regex "vazia" (que não dá match em nada)
             return !regexpTree.isEmpty(intersection);
         } catch (e) {
-            console.warn(`⚠️  Aviso: Falha ao analisar regex. Recorrendo à comparação de string para "${path1}" e "${path2}".`);
+            console.warn(`⚠️ Aviso: Falha ao analisar regex. Recorrendo à comparação de string para "${path1}" e "${path2}". Detalhe: ${e.message}`);
             return path1 === path2;
         }
     }
