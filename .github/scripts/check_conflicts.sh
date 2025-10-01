@@ -12,6 +12,7 @@ DEFAULT_PRODUCTION_HOSTS=(
   "payments.mundipagg.com"
 )
 
+# --- Validação de Entradas ---
 if [ -z "$1" ]; then
   echo "✅ Nenhum arquivo de serviço foi alterado. Pulando a verificação."
   exit 0
@@ -20,28 +21,22 @@ fi
 CHANGED_FILES="$1"
 echo "🔍 Arquivos alterados para verificação: $CHANGED_FILES"
 
+# --- Função para extrair todas as rotas de todos os arquivos ---
 extract_routes() {
   find services -type f -name '*.yml' | while read -r file; do
-    # Determina qual lista de hosts padrão usar
-    local -n default_hosts_ref=DEFAULT_STAGING_HOSTS # Referência para o array
+    local -n default_hosts_ref=DEFAULT_STAGING_HOSTS
     if [[ "$file" == *"services/production/"* ]]; then
       default_hosts_ref=DEFAULT_PRODUCTION_HOSTS
     fi
-
-    # Converte o array bash para um array JSON para passar ao jq
     default_hosts_json=$(printf '%s\n' "${default_hosts_ref[@]}" | jq -R . | jq -s .)
-
-    # yq para converter para JSON, jq para extrair e achatar os dados
     yq e -o=json "$file" | jq -c \
       --arg file "$file" \
       --argjson default_hosts "$default_hosts_json" \
       '
       .services[]? | . as $service |
       .routes[]? | . as $route |
-      # Usa a LISTA de hosts padrão se .hosts for nulo ou vazio
       ($route.hosts // $default_hosts | if length == 0 then $default_hosts else . end) as $hosts |
       ($route.paths // []) as $paths |
-      # Expande para criar um objeto para cada combinação de host e path
       $hosts[] as $h |
       $paths[] as $p |
       {
@@ -55,62 +50,53 @@ extract_routes() {
   done
 }
 
-# --- Lógica Principal (o restante do script permanece o mesmo) ---
+# --- Lógica Principal ---
 CONFLICT_FOUND=0
 echo "⚙️  Construindo o mapa de todas as rotas existentes..."
 ALL_ROUTES_FLAT=$(extract_routes)
-
-# Pega apenas as rotas dos arquivos alterados
 CHANGED_ROUTES_FLAT=$(echo "$ALL_ROUTES_FLAT" | grep -Ff <(echo "$CHANGED_FILES" | tr ' ' '\n'))
 
 echo "🔎 Verificando conflitos para as rotas alteradas..."
 
-# Itera sobre cada rota alterada
 while read -r changed_route_json; do
-  c_file=$(echo "$changed_route_json" | jq -r .file)
-  c_service=$(echo "$changed_route_json" | jq -r .service)
-  c_route=$(echo "$changed_route_json" | jq -r .route)
   c_host=$(echo "$changed_route_json" | jq -r .host)
   c_path=$(echo "$changed_route_json" | jq -r .path)
 
-  # Itera sobre todas as rotas existentes para comparação
   while read -r existing_route_json; do
-    e_file=$(echo "$existing_route_json" | jq -r .file)
-    e_service=$(echo "$existing_route_json" | jq -r .service)
-    e_route=$(echo "$existing_route_json" | jq -r .route)
-    e_host=$(echo "$existing_route_json" | jq -r .host)
-    e_path=$(echo "$existing_route_json" | jq -r .path)
-
-    # Não compara uma rota consigo mesma (mesmo arquivo, serviço e rota)
-    if [ "$c_file" == "$e_file" ] && [ "$c_service" == "$e_service" ] && [ "$c_route" == "$e_route" ]; then
+    # ✅✅✅ CORREÇÃO APLICADA AQUI ✅✅✅
+    # Compara as strings JSON inteiras. Isso previne que uma rota seja comparada
+    # consigo mesma, mas permite a comparação de duas rotas idênticas em arquivos diferentes.
+    if [ "$changed_route_json" == "$existing_route_json" ]; then
       continue
     fi
     
-    # Verifica se os hosts são iguais
+    e_host=$(echo "$existing_route_json" | jq -r .host)
+    e_path=$(echo "$existing_route_json" | jq -r .path)
+
     if [ "$c_host" == "$e_host" ]; then
-      # Lógica de comparação de paths (incluindo regex)
-      # Remove o prefixo '~' para o match de regex em bash
       c_path_clean=${c_path#\~}
       e_path_clean=${e_path#\~}
       
-      # Caso 1: Ambos são strings literais e iguais
+      CONFLICT=0
       if [[ ! "$c_path" == "~"* && ! "$e_path" == "~"* && "$c_path" == "$e_path" ]]; then
-        CONFLICT_FOUND=1
-        
-      # Caso 2: Path existente é regex e dá match com o novo path
-      elif [[ "$e_path" == "~"* && "$c_path" != "~"* && "$c_path" =~ $e_path_clean ]]; then
-        CONFLICT_FOUND=1
-
-      # Caso 3: Novo path é regex e dá match com o path existente
-      elif [[ "$c_path" == "~"* && "$e_path" != "~"* && "$e_path" =~ $c_path_clean ]]; then
-        CONFLICT_FOUND=1
-      
-      # Caso 4: Ambos são regex e são idênticos (checar sobreposição real é muito complexo)
+        CONFLICT=1
+      elif [[ "$e_path" == "~"* && ! "$c_path" == "~"* && "$c_path" =~ $e_path_clean ]]; then
+        CONFLICT=1
+      elif [[ "$c_path" == "~"* && ! "$e_path" == "~"* && "$e_path" =~ $c_path_clean ]]; then
+        CONFLICT=1
       elif [[ "$c_path" == "~"* && "$e_path" == "~"* && "$c_path" == "$e_path" ]]; then
-        CONFLICT_FOUND=1
+        CONFLICT=1
       fi
 
-      if [ $CONFLICT_FOUND -eq 1 ]; then
+      if [ $CONFLICT -eq 1 ]; then
+        CONFLICT_FOUND=1
+        c_file=$(echo "$changed_route_json" | jq -r .file)
+        c_service=$(echo "$changed_route_json" | jq -r .service)
+        c_route=$(echo "$changed_route_json" | jq -r .route)
+        e_file=$(echo "$existing_route_json" | jq -r .file)
+        e_service=$(echo "$existing_route_json" | jq -r .service)
+        e_route=$(echo "$existing_route_json" | jq -r .route)
+
         echo "======================================================================"
         echo "🚨 ERRO: Conflito de Rota Detectado!"
         echo "----------------------------------------------------------------------"
@@ -128,17 +114,15 @@ while read -r changed_route_json; do
         echo "  - Host:     $e_host"
         echo "  - Path:     $e_path"
         echo "======================================================================"
-        # Não precisa continuar checando esta rota, já encontramos um conflito
         break
       fi
     fi
-  done < <(echo "$ALL_ROUTES_FLAT") # Alimenta o loop com a lista de todas as rotas
+  done < <(echo "$ALL_ROUTES_FLAT")
   
   if [ $CONFLICT_FOUND -eq 1 ]; then
-    # Para o script inteiro se um conflito for encontrado
     break
   fi
-done < <(echo "$CHANGED_ROUTES_FLAT") # Alimenta o loop com a lista de rotas alteradas
+done < <(echo "$CHANGED_ROUTES_FLAT")
 
 # --- Conclusão ---
 if [ $CONFLICT_FOUND -eq 1 ]; then
