@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
 const { globSync } = require('glob');
-const intersect = require('regex-intersect');
+const regexpTree = require('regexp-tree');
 
 // --- Configuração ---
 const DEFAULT_HOSTS = {
@@ -73,13 +73,19 @@ function checkConflict(path1, path2) {
         return new RegExp(`^${path2Clean}$`).test(path1);
     }
     
-    // Caso 3: Ambos são regex (a verificação poderosa)
+    // ✅✅✅ CORREÇÃO APLICADA AQUI ✅✅✅
+    // Caso 3: Ambos são regex (usando a nova biblioteca 'regexp-tree')
     if (isRegex1 && isRegex2) {
         try {
-            // A biblioteca retorna null se não houver interseção
-            return intersect(path1Clean, path2Clean) !== null;
+            // A biblioteca espera o formato /regex/ para análise
+            const re1 = regexpTree.parse(`/${path1Clean}/`);
+            const re2 = regexpTree.parse(`/${path2Clean}/`);
+            
+            const intersection = regexpTree.intersect(re1, re2);
+            
+            // Verifica se a interseção resulta em uma regex "vazia" (que não dá match em nada)
+            return !regexpTree.isEmpty(intersection);
         } catch (e) {
-            // Em caso de erro na análise do regex, recorre à comparação de strings
             console.warn(`⚠️  Aviso: Falha ao analisar regex. Recorrendo à comparação de string para "${path1}" e "${path2}".`);
             return path1 === path2;
         }
@@ -106,7 +112,6 @@ async function main() {
 
     for (const cRoute of changedRoutes) {
         for (const eRoute of allRoutes) {
-            // Pula a comparação de uma rota exatamente consigo mesma
             if (JSON.stringify(cRoute) === JSON.stringify(eRoute)) {
                 continue;
             }

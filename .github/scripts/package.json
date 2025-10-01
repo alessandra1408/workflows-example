@@ -6,6 +6,6 @@
   "dependencies": {
     "glob": "^10.3.12",
     "js-yaml": "^4.1.0",
-    "regex-intersect": "^2.0.0"
+    "regexp-tree": "^0.1.28"
   }
 }
