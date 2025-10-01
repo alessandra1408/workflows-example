@@ -33,7 +33,8 @@ jobs:
         run: npm cache clean --force
 
       - name: Install Node.js dependencies
-        run: npm --prefix .github/scripts install
+        # Adicionamos a flag --registry para forçar o uso do registro público
+        run: npm --prefix .github/scripts install --registry https://registry.npmjs.org/
 
       - name: Get changed service files
         id: changed-files
