@@ -5,6 +5,6 @@
   "dependencies": {
     "js-yaml": "^4.1.0",
     "glob": "^10.3.12",
-    "automata.js": "^0.2.2"
+    "automata.js": "^0.2.1"
   }
 }
