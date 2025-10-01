@@ -59,7 +59,7 @@ services:
           - payments.stone.com.br
           - payments-stg.stone.com.br
         paths:
-          - ~/v1/charges?$
+          - ~/v1/charges?
         methods:
           - POST
         strip_path: false
