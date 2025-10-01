@@ -1,9 +1,5 @@
 name: Route Conflict Check
 
-permissions:
-  pull-requests: read
-  contents: read
-
 on:
   pull_request:
     paths:
@@ -24,12 +20,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Use uma versão LTS do Node.js
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: '.github/scripts/package.json'
 
       - name: Install Node.js dependencies
-        # O --prefix garante que o npm rode dentro da pasta de scripts
         run: npm --prefix .github/scripts install
 
       - name: Get changed service files
