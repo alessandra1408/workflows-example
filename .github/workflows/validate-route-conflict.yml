@@ -28,13 +28,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: '.github/scripts/package.json'
 
-      # ✅ NOVO PASSO ADICIONADO AQUI
       - name: Clear npm cache
         run: npm cache clean --force
 
       - name: Install Node.js dependencies
-        # Adicionamos a flag --registry para forçar o uso do registro público
-        run: npm --prefix .github/scripts install --registry https://registry.npmjs.org/
+        run: npm --prefix .github/scripts install
 
       - name: Get changed service files
         id: changed-files
