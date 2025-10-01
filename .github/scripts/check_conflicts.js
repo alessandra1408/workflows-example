@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
 const { globSync } = require('glob');
-const { Intersection } = require('rxxr');
+const regexpTree = require('regexp-tree');
 
 // --- Configuração ---
 const DEFAULT_HOSTS = {
@@ -23,13 +23,17 @@ function extractRoutes(filePath) {
     try {
         const fileContent = fs.readFileSync(filePath, 'utf8');
         const data = yaml.load(fileContent);
+
         if (!data || !data.services) return [];
+
         const env = filePath.includes('staging') ? 'staging' : 'production';
         const defaultHostsForEnv = DEFAULT_HOSTS[env] || [];
+
         for (const service of data.services || []) {
             for (const route of service.routes || []) {
                 const hosts = route.hosts || defaultHostsForEnv;
                 const paths = route.paths || [];
+
                 for (const host of hosts) {
                     for (const p of paths) {
                         routes.push({
@@ -44,7 +48,7 @@ function extractRoutes(filePath) {
             }
         }
     } catch (e) {
-        console.warn(`⚠️ Aviso: Falha ao ler o arquivo ${filePath}: ${e.message}`);
+        console.warn(`⚠️  Aviso: Falha ao ler o arquivo ${filePath}: ${e.message}`);
     }
     return routes;
 }
@@ -71,18 +75,20 @@ function checkConflict(path1, path2) {
         return new RegExp(`^${path2Clean}$`).test(path1);
     }
     
-    // ✅✅✅ CORREÇÃO FINAL USANDO A BIBLIOTECA CERTA ✅✅✅
     // Caso 3: Ambos são regex
     if (isRegex1 && isRegex2) {
         try {
-            // A biblioteca rxxr trabalha com objetos RegExp nativos do JS
-            const re1 = new RegExp(path1Clean);
-            const re2 = new RegExp(path2Clean);
+            // ✅✅✅ CORREÇÃO APLICADA AQUI ✅✅✅
+            // Escapa as barras "/" para que o parser do regexp-tree não se confunda
+            const escapedPath1 = path1Clean.replace(/\//g, '\\/');
+            const escapedPath2 = path2Clean.replace(/\//g, '\\/');
+
+            const re1 = regexpTree.parse(`/${escapedPath1}/`);
+            const re2 = regexpTree.parse(`/${escapedPath2}/`);
             
-            // A API é limpa e direta
-            const intersection = new Intersection(re1, re2);
+            const intersection = regexpTree.intersect(re1, re2);
             
-            return !intersection.isEmpty();
+            return !regexpTree.isEmpty(intersection);
         } catch (e) {
             console.warn(`⚠️ Aviso: Falha ao analisar regex. Recorrendo à comparação de string para "${path1}" e "${path2}". Detalhe: ${e.message}`);
             return path1 === path2;
@@ -90,6 +96,7 @@ function checkConflict(path1, path2) {
     }
     return false;
 }
+
 
 async function main() {
     const changedFiles = process.argv.slice(2);
@@ -109,7 +116,9 @@ async function main() {
 
     for (const cRoute of changedRoutes) {
         for (const eRoute of allRoutes) {
-            if (JSON.stringify(cRoute) === JSON.stringify(eRoute)) continue;
+            if (JSON.stringify(cRoute) === JSON.stringify(eRoute)) {
+                continue;
+            }
 
             if (cRoute.host === eRoute.host && checkConflict(cRoute.path, eRoute.path)) {
                 conflictFound = true;
