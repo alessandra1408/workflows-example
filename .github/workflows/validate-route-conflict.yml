@@ -5,8 +5,6 @@ on:
     paths:
       - "services/staging/*.yml"
       - "services/production/*.yml"
-      - "plugins/staging/*.yml"
-      - "plugins/production/*.yml"
     branches:
       - "main"
 
@@ -17,86 +15,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # Faz o fetch de todo o histórico para comparar com a branch base
           fetch-depth: 0
 
       - name: Install dependencies
-        run: sudo snap install yq jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+          echo "yq version $(yq --version)"
+          echo "jq version $(jq --version)"
 
       - name: Get changed service files
-        id: changed
+        id: changed-files
         run: |
-          content=$(git diff --name-only origin/${GITHUB_BASE_REF}...HEAD \
-                    | grep -E '^services/.*\.ya?ml$' \
-                    | sed '/^$/d')
-          echo "files<<EOF" >> $GITHUB_OUTPUT
-          echo "$content" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "Changed service files: $content"
+          # Pega apenas os arquivos .yml dentro dos diretórios de serviço
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^services/.*\.ya?ml$' | tr '\n' ' ')
+          echo "files=${CHANGED_FILES}" >> $GITHUB_OUTPUT
 
-      - name: Build JSON of all routes
-        id: build_routes
-        run: |
-          # Monta lista de todas as rotas (staging + production)
-          all=$(find services -type f -name '*.yml' | while read f; do
-            yq -o=json e '{"file": strenv(f), "hosts": .hosts, "paths": .paths}' "$f"
-          done | jq -s .)
-          echo "all_routes=$all" >> $GITHUB_OUTPUT
-
-          # Monta lista das rotas alteradas
-          new=$(echo "${{ steps.changed.outputs.files }}" | tr ' ' '\n' | while read f; do
-            yq -o=json e '{"file": strenv(f), "hosts": .hosts, "paths": .paths}' "$f"
-          done | jq -s .)
-          echo "new_routes=$new" >> $GITHUB_OUTPUT
-
-      - name: Check for conflicts
-        run: |
-          all='${{ steps.build_routes.outputs.all_routes }}'
-          new='${{ steps.build_routes.outputs.new_routes }}'
-          conflict=0
-
-          # Para cada rota alterada
-          echo "$new" | jq -c '.[]' | while read nr; do
-            nfile=$(echo "$nr" | jq -r .file)
-
-            # Hosts e paths como arrays
-            nhosts=$(echo "$nr" | jq -c '.hosts[]')
-            npaths=$(echo "$nr" | jq -c '.paths[]')
-
-            # Compara contra todas as rotas existentes
-            echo "$all" | jq -c '.[]' | while read er; do
-              efile=$(echo "$er" | jq -r .file)
-              # Ignora mesmo arquivo
-              if [[ "$efile" == "$nfile" ]]; then
-                continue
-              fi
-
-              ehosts=$(echo "$er" | jq -c '.hosts[]')
-              epaths=$(echo "$er" | jq -c '.paths[]')
-
-              # Checa host e path
-              for nh in $nhosts; do
-                nh=$(echo "$nh" | tr -d '"')
-                for eh in $ehosts; do
-                  eh=$(echo "$eh" | tr -d '"')
-                  if [[ "$nh" == "$eh" ]]; then
-                    for np in $npaths; do
-                      np=$(echo "$np" | tr -d '"')
-                      for ep in $epaths; do
-                        ep=$(echo "$ep" | tr -d '"')
-                        if [[ "$np" =~ $ep ]]; then
-                          echo "⚠️ Conflito detectado: $nfile (host=$nh path=$np) colide com $efile (host=$eh path=$ep)"
-                          conflict=1
-                        fi
-                      done
-                    done
-                  fi
-                done
-              done
-            done
-          done
-
-          if [ $conflict -eq 1 ]; then
-            exit 1
-          else
-            echo "✅ Nenhum conflito detectado."
-          fi
+      - name: Run Route Conflict Check Script
+        run: ./.github/scripts/check_conflicts.sh "${{ steps.changed-files.outputs.files }}"
