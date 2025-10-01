@@ -1,0 +1,11 @@
+{
+  "name": "route-conflict-checker",
+  "version": "1.0.0",
+  "description": "Checks for Kong route conflicts",
+  "private": true,
+  "dependencies": {
+    "glob": "^10.3.12",
+    "js-yaml": "^4.1.0",
+    "regex-intersect": "^2.0.0"
+  }
+}

@@ -19,24 +19,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Faz o fetch de todo o histórico para comparar com a branch base
           fetch-depth: 0
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
-          sudo chmod +x /usr/bin/yq
-          echo "yq version $(yq --version)"
-          echo "jq version $(jq --version)"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Use uma versão LTS do Node.js
+          cache: 'npm'
+          cache-dependency-path: '.github/scripts/package.json'
+
+      - name: Install Node.js dependencies
+        # O --prefix garante que o npm rode dentro da pasta de scripts
+        run: npm --prefix .github/scripts install
 
       - name: Get changed service files
         id: changed-files
         run: |
-          # Pega apenas os arquivos .yml dentro dos diretórios de serviço
           CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^services/.*\.ya?ml$' | tr '\n' ' ')
           echo "files=${CHANGED_FILES}" >> $GITHUB_OUTPUT
 
       - name: Run Route Conflict Check Script
-        run: ./.github/scripts/check_conflicts.sh "${{ steps.changed-files.outputs.files }}"
+        run: node .github/scripts/check_conflicts.js ${{ steps.changed-files.outputs.files }}
