@@ -1,5 +1,9 @@
 name: Route Conflict Check
 
+permissions:
+  pull-requests: read
+  contents: read
+
 on:
   pull_request:
     paths:
