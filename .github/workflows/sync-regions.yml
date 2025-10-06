@@ -5,8 +5,6 @@ permissions:
   pull-requests: write
   deployments: write
   actions: read
-  issues: write
-  
 
 on:
   workflow_call:
@@ -15,13 +13,17 @@ on:
         type: string
         description: "Region"
         required: true
-      region-name:
+      region_name:
         type: string
         description: "The name of region"
         required: true
       environment:
         type: string
         description: "The name of environment"
+        required: true
+      dynamic_environment:
+        type: string
+        description: "The name of dynamic environment"
         required: true
       files_override:
         type: string
@@ -35,14 +37,10 @@ on:
         type: string
         description: "Número do PR associado"
         required: false
-      approvers:
-        type: string
-        description: "Lista de aprovadores"
-        required: true
 
 jobs:
   start_job:
-    runs-on: ubuntu-latest
+    runs-on: small-runner
     steps:
       - name: Show who started the job
         run: |
@@ -51,7 +49,7 @@ jobs:
 
   filesChanged:
     if: inputs.files_override == ''
-    runs-on: ubuntu-latest
+    runs-on: small-runner
     needs: [start_job]
     steps:
       - id: file_changes
@@ -66,7 +64,7 @@ jobs:
       files: ${{ steps.files.outputs.files }}
 
   select-files:
-    runs-on: ubuntu-latest
+    runs-on: small-runner
     needs: [filesChanged]
     if: always()
     outputs:
@@ -76,37 +74,23 @@ jobs:
         id: selector
         run: |
           if [ -n '${{ inputs.files_override }}' ]; then
-            echo "Usando lista de arquivos externa (modo rollback)."
             echo "files=${{ inputs.files_override }}" >> $GITHUB_OUTPUT
           else
-            echo "Usando lista de arquivos detectada (modo sync normal)."
             echo "files=${{ needs.filesChanged.outputs.files }}" >> $GITHUB_OUTPUT
           fi
 
-  # approve:
-  #   runs-on: ubuntu-latest
-  #   needs: [select-files]
-  #   steps:
-  #     - name: Aprovar Mudanças
-  #       run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
-
-      
   approve:
-    runs-on: ubuntu-latest
+    runs-on: small-runner
     needs: [select-files]
+    environment: ${{ inputs.dynamic_environment }}
     steps:
-      - name: Aprovação manual para deploy
-        uses: trstringer/manual-approval@v1
-        with:
-          secret: ${{ github.TOKEN }}
-          approvers: ${{ inputs.approvers }}
-          minimum-approvals: 1
-          issue-title: "Aprovação de Apply para Produção"
-          issue-body: "Por favor, aprove o apply da branch `main` para ${{inputs.region}}."
+      - name: Aprovar Mudanças
+        run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
 
   apply:
-    runs-on: ubuntu-latest
+    runs-on: small-runner-on-demand
     needs: [select-files, approve]
+    environment: ${{ inputs.environment }}
     strategy:
       fail-fast: false
       matrix:

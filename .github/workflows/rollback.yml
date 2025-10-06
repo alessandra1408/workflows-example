@@ -1,13 +1,10 @@
-# Arquivo: .github/workflows/rollback.yml
-name: Rollback Kong Staging Configuration
+name: TEST Sync Rollback Kong Configuration
 
 permissions:
   contents: write
   pull-requests: write
   actions: read
   deployments: write
-  issues: write
-
 
 on:
   workflow_call:
@@ -29,63 +26,51 @@ on:
         type: string
         description: "Region"
         required: true
-      region-name:
+      region_name:
         type: string
         description: "The name of region"
         required: true
-      approvers:
+      dynamic_environment:
         type: string
-        description: "Lista de aprovadores"
+        description: "The name of dynamic environment"
         required: true
 
 jobs:
-  # approve_job:
-  #   runs-on: ubuntu-latest
-  #   environment: ${{inputs.dynamic_environment}}
-  #   steps:
-  #     - name: Aprovar Mudanças
-  #       run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
-
-
-  approve_job:
+  approve:
     runs-on: ubuntu-latest
+    environment: ${{inputs.dynamic_environment}}
     steps:
-      - name: Aprovação manual para deploy
-        uses: trstringer/manual-approval@v1
-        with:
-          secret: ${{ github.TOKEN }}
-          approvers: ${{ inputs.approvers }}
-          minimum-approvals: 1
-          issue-title: "Aprovação de Apply para Produção"
-          issue-body: "Por favor, aprove o apply da branch `main` para ${{inputs.region}}."
-        
+      - name: Aprovar Mudanças
+        run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
 
   prepare-matrix:
     runs-on: ubuntu-latest
-    needs: [approve_job]
+    needs: [approve]
     outputs:
-      region: ${{ steps.set-matrix.outputs.matrix }}
-      region-name: ${{ steps.set-matrix.outputs.matrix }}
+      matrix_config: ${{ steps.set-matrix.outputs.matrix_config }}
     steps:
-      - name: Generate region matrix from input string
+      - name: Generate paired matrix from input strings
         id: set-matrix
         run: |
-          region=$(echo '${{ inputs.region }}' | jq -R 'split(",")' | jq -c .)
-          echo "matrix=$region" >> $GITHUB_OUTPUT
-
-          region_name=$(echo '${{ inputs.region-name }}' | jq -R 'split(",")' | jq -c .)
-          echo "region-name=$region_name" >> $GITHUB_OUTPUT
+          matrix_json=$(paste -d ',' \
+            <(echo "${{ inputs.region }}" | tr ',' '\n') \
+            <(echo "${{ inputs.region_name }}" | tr ',' '\n') \
+            <(echo "${{ inputs.environment }}" | tr ',' '\n') \
+            | jq -Rsc 'split("\n") | map(select(. != "")) | map(split(",")) | map({region: .[0], region_name: .[1], environment: .[2]})')
+          
+          echo "Matriz de configuração gerada:"
+          echo $matrix_json | jq .
+          echo "matrix_config=$matrix_json" >> $GITHUB_OUTPUT
 
   rollback:
-    needs: [prepare-matrix]
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    needs: [prepare-matrix]
+    environment: ${{ matrix.environment }}
     strategy:
       fail-fast: false
       matrix:
         file: ${{ fromJson(inputs.files_to_apply) }}
-        region: ${{ fromJson(needs.prepare-matrix.outputs.region) }}
-        region-name: ${{ fromJson(needs.prepare-matrix.outputs.region-name) }}
+        include: ${{ fromJson(needs.prepare-matrix.outputs.matrix_config) }}
     steps:
       - name: Checkout Code at Correct Version
         uses: actions/checkout@v4
@@ -98,9 +83,10 @@ jobs:
 
       - name: validate 
         run: |
-          echo "job finished"
-          echo "region: ${{ inputs.region }}"
-          echo "region-name: ${{ inputs.region-name }}"
+          echo "Iniciando job para o arquivo: ${{ matrix.file }}"
+          echo "Região: ${{ matrix.region }}"
+          echo "Nome da Região: ${{ matrix.region_name }}"
+          echo "Ambiente: ${{ matrix.environment }}"
 
   create-revert-pr-manual:
     runs-on: ubuntu-latest
@@ -110,46 +96,44 @@ jobs:
       pull-requests: write
       deployments: write
     steps:
-    - name: 'Checkout da branch principal (com histórico mínimo)'
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GH_TOKEN }}
-        ref: 'main'
-        fetch-depth: 2
 
-    - name: 'Configurar Git'
-      run: |
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+      - name: 'Checkout da branch principal (com histórico mínimo)'
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          ref: 'main'
+          fetch-depth: 2
 
-    - name: 'Executar Rollback com Git Checkout e Criar PR'
-      env:
-        GH_TOKEN: ${{ secrets.GH_TOKEN }}
-      run: |
-        PR_NUMBER=${{ inputs.pr_number_to_revert }} # Mantemos para o título do PR
-        
-        echo "Iniciando rollback da pasta 'services/' para o estado do commit anterior (main~1)"
-        
-        NEW_BRANCH="rollback-services-pr-${PR_NUMBER}-$(date +%s)"
-        git checkout -b $NEW_BRANCH
-        
-        # Restauramos a pasta 'services/' para o estado do commit
-        # PAI do último commit da main.
-        git checkout main~1 -- 'services/'
-        
-        if ! git diff-index --quiet HEAD; then
-          # O SHA do commit anterior pode ser obtido com 'git rev-parse HEAD~1'
+      - name: 'Configurar Git'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: 'Executar Rollback com Git Checkout e Criar PR'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          PR_NUMBER=${{ inputs.pr_number_to_revert }}
+          
+          echo "Iniciando rollback da pasta 'services/' para o estado do commit anterior (main~1)"
+          
+          NEW_BRANCH="rollback-services-pr-${PR_NUMBER}-$(date +%s)"
+          git checkout -b $NEW_BRANCH
+          
+          git checkout main~1 -- 'services/'
+          
+          if ! git diff-index --quiet HEAD; then
+            PARENT_SHA=$(git rev-parse --short HEAD~1)
+            git commit -m "revert/restore service folder to commit state in ${PARENT_SHA}"
+          else
+            echo "Nenhuma mudança para reverter na pasta 'services/'."
+          fi
+          
+          git push origin $NEW_BRANCH
+          
           PARENT_SHA=$(git rev-parse --short HEAD~1)
-          git commit -m "revert/restore service folder to commit state in ${PARENT_SHA}"
-        else
-          echo "Nenhuma mudança para reverter na pasta 'services/'."
-        fi
-        
-        git push origin $NEW_BRANCH
-        
-        PARENT_SHA=$(git rev-parse --short HEAD~1)
-        gh pr create \
-          --base main \
-          --head $NEW_BRANCH \
-          --title "Rollback: Restore to commit ${PARENT_SHA}" \
-          --body "Este PR executa um rollback na pasta \`services/\`, restaurando seu conteúdo para o estado anterior ao último merge. Isso foi acionado devido ao PR #${PR_NUMBER}."
+          gh pr create \
+            --base main \
+            --head $NEW_BRANCH \
+            --title "Rollback: Restore to commit ${PARENT_SHA}" \
+            --body "Este PR executa um rollback na pasta \`services/\`, restaurando seu conteúdo para o estado anterior ao último merge. Isso foi acionado devido ao PR #${PR_NUMBER}."
