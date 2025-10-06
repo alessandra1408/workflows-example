@@ -86,7 +86,6 @@ jobs:
 
           echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
           echo "approver=${APPROVER_LOGIN}" >> $GITHUB_OUTPUT
-          echo "token=${{ steps.app-token.outputs.token }}" >> $GITHUB_OUTPUT
 
       - name: '2. Get Stable Commit SHA'
         id: get_stable_sha
@@ -98,7 +97,7 @@ jobs:
       - name: '3. Create/Setup Dynamic Environment Gate'
         id: create_env
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPROVER: ${{ steps.get_pr_info_and_approver.outputs.approver }}
           PR_NUMBER: ${{ steps.get_pr_info_and_approver.outputs.pr_number }}
         run: |
@@ -157,11 +156,10 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-
       - name: Verificar Aprovadores e Definir Ambiente
         id: decide_env
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           PR_NUMBER: ${{ needs.setup_environment.outputs.pr_number }}
           DYNAMIC_ENV_NAME: ${{ needs.setup_environment.outputs.env_name }}
         run: |
