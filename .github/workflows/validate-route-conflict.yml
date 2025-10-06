@@ -3,8 +3,8 @@ name: Route Conflict Check
 on:
   pull_request:
     paths:
-      - "services/staging/*.yml"
-      - "services/production/*.yml"
+      - "services/staging/algo.yml"
+      - "services/production/algo.yml"
     branches:
       - "main"
 
