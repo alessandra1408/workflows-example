@@ -19,6 +19,7 @@ services:
           - POST
           - GET
           - PUT
+          - DELETE
         protocols:
           - http
         paths:
