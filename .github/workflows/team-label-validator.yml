@@ -1,0 +1,72 @@
+name: Validador de Label de Time no PR
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - labeled
+      - unlabeled
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  validate_team_label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: '1. Extrair slug do time a partir do label'
+        id: get_team
+        run: |
+          team_slug=$(echo '${{ toJSON(github.event.pull_request.labels) }}' | jq -r '.[] | .name | select(startswith("team:")) | ltrimstr("team:")')
+          
+          if [[ -n "$team_slug" ]]; then
+            echo "Label de time encontrado. Slug: $team_slug"
+            echo "team_slug=$team_slug" >> $GITHUB_OUTPUT
+          else
+            echo "Nenhum label 'team:' encontrado no PR."
+            echo "team_slug=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: '2. Buscar membros e preparar comentário'
+        id: prepare_message
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          TEAM_SLUG: ${{ steps.get_team.outputs.team_slug }}
+        run: |
+            MESSAGE_BODY=""
+            JOB_CONCLUSION="success"
+
+            if [[ -n "$TEAM_SLUG" ]]; then
+                echo "Label 'team:' encontrado. Validando time '${TEAM_SLUG}'..."
+                team_members=$(gh api "orgs/${{ github.repository_owner }}/teams/${TEAM_SLUG}/members" --jq '.[].login' || true)
+                
+                if [[ -z "$team_members" ]]; then
+                    MESSAGE_BODY="**❌ Erro: Label de Time Inválido**\n\nO time \`$TEAM_SLUG\` especificado no label não foi encontrado ou não possui membros.\n\n**Ação Requerida**: Por favor, corrija o nome do time no label \`team:...\` para prosseguir."
+                    JOB_CONCLUSION="failure"
+                else
+                    MEMBER_LIST=$(echo "$team_members" | sed 's/^/- @/')
+                    MESSAGE_BODY="**✅ Time de Aprovadores Válido**\n\nO time \`$TEAM_SLUG\` foi localizado. Após o merge, o fluxo seguirá com os seguintes aprovadores (exceto o autor do pr):\n$MEMBER_LIST"
+                fi
+            else
+                MESSAGE_BODY="**ℹ️ Fluxo de Aprovação Padrão**\n\nNenhum label \`team:...\` encontrado. Ao ser mergeado, este PR seguirá pelo fluxo de aprovação padrão."
+            fi
+            
+            echo "message<<EOF" >> $GITHUB_OUTPUT
+            echo "$MESSAGE_BODY" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "conclusion=$JOB_CONCLUSION" >> $GITHUB_OUTPUT
+
+      - name: '3. Publicar ou atualizar comentário no PR'
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: always()
+        with:
+          header: team-label-validation
+          message: ${{ steps.prepare_message.outputs.message }}
+
+      - name: '4. Forçar falha do job se a validação falhou'
+        if: steps.prepare_message.outputs.conclusion == 'failure'
+        run: |
+          echo "::error::A validação do label do time falhou. Verifique o comentário no PR para mais detalhes."
+          exit 1

@@ -88,52 +88,115 @@ jobs:
           echo "Nome da Região: ${{ matrix.region_name }}"
           echo "Ambiente: ${{ matrix.environment }}"
 
-  create-revert-pr-manual:
+  prepare-commit-and-diff:
     runs-on: ubuntu-latest
     needs: [rollback]
     permissions:
       contents: write
       pull-requests: write
       deployments: write
+    outputs:
+      COMMIT_HAS_CHANGES: ${{ steps.revert.outputs.COMMIT_HAS_CHANGES }}
     steps:
-
-      - name: 'Checkout da branch principal (com histórico mínimo)'
+      - name: Checkout da branch principal
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           ref: 'main'
-          fetch-depth: 2
 
-      - name: 'Configurar Git'
+      - name: Reverter arquivos para gerar o diff
+        id: revert
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-
-      - name: 'Executar Rollback com Git Checkout e Criar PR'
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          PR_NUMBER=${{ inputs.pr_number_to_revert }}
-          
-          echo "Iniciando rollback da pasta 'services/' para o estado do commit anterior (main~1)"
-          
-          NEW_BRANCH="rollback-services-pr-${PR_NUMBER}-$(date +%s)"
-          git checkout -b $NEW_BRANCH
-          
-          git checkout main~1 -- 'services/'
-          
-          if ! git diff-index --quiet HEAD; then
-            PARENT_SHA=$(git rev-parse --short HEAD~1)
-            git commit -m "revert/restore service folder to commit state in ${PARENT_SHA}"
+          echo "Revertendo arquivos para gerar o diff..."
+          FILES_TO_REVERT=$(echo '${{ inputs.files_to_apply }}' | jq -r '.[] | @sh' | tr '\n' ' ')
+          if [[ -z "$FILES_TO_REVERT" ]]; then
+            echo "COMMIT_HAS_CHANGES=false" >> $GITHUB_OUTPUT
           else
-            echo "Nenhuma mudança para reverter na pasta 'services/'."
+            git checkout ${{ inputs.stable_commit_sha }} -- $FILES_TO_REVERT
+            echo "COMMIT_HAS_CHANGES=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publicar diff no Job Summary
+        if: ${{ steps.revert.outputs.COMMIT_HAS_CHANGES }} == 'true'
+        run: |
+          GIT_DIFF=$(git diff --color=never HEAD)
+          if [ ${#GIT_DIFF} -gt 60000 ]; then
+            GIT_DIFF="$(echo "$GIT_DIFF" | head -c 60000)\n\n... (diff truncado por ser muito longo)"
           fi
           
-          git push origin $NEW_BRANCH
+          # Escreve o conteúdo Markdown no arquivo especial GITHUB_STEP_SUMMARY
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ## ⚠️ Aprovação Necessária para Rollback na \`main\`
+          As seguintes alterações (reversão do PR #${{ inputs.pr_number_to_revert }}) serão commitadas diretamente na branch \`main\` após a sua aprovação.
+          <details><summary>Clique para ver o diff completo</summary>
           
-          PARENT_SHA=$(git rev-parse --short HEAD~1)
-          gh pr create \
-            --base main \
-            --head $NEW_BRANCH \
-            --title "Rollback: Restore to commit ${PARENT_SHA}" \
-            --body "Este PR executa um rollback na pasta \`services/\`, restaurando seu conteúdo para o estado anterior ao último merge. Isso foi acionado devido ao PR #${PR_NUMBER}."
+          \`\`\`diff
+          $GIT_DIFF
+          \`\`\`
+          </details>
+          
+          **Por favor, revise cuidadosamente e aprove o passo seguinte para continuar.**
+          EOF
+
+      - name: Salvar alterações como artefato
+        if: ${{ steps.revert.outputs.COMMIT_HAS_CHANGES }} == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reverted-files
+          path: .
+
+  wait-for-approval:
+    runs-on: ubuntu-latest
+    needs: [prepare-commit-and-diff]
+    environment: 
+      name: rollback-approval-pr-${{ inputs.pr_number_to_revert }}
+      url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Aguardando aprovação
+        run: |
+          if [[ "${{ needs.prepare-commit-and-diff.outputs.COMMIT_HAS_CHANGES }}" == "false" ]]; then
+            echo "Nenhuma mudança para reverter. Aprovação não é necessária."
+          else
+            echo "Aprovação concedida. Prosseguindo com o commit para a 'main'."
+          fi
+
+  execute-commit:
+    runs-on: ubuntu-latest
+    needs: [wait-for-approval, prepare-commit-and-diff]
+    if: needs.prepare-commit-and-diff.outputs.COMMIT_HAS_CHANGES == 'true'
+    steps:
+      - name: Checkout da branch principal (para contexto Git)
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: 'main'
+
+      - name: Baixar artefato com arquivos revertidos
+        uses: actions/download-artifact@v4
+        with:
+          name: reverted-files
+          path: .
+
+      - name: Configurar Git
+        run: |
+          git config --global user.name "payments-api-gateway[bot]"
+          git config --global user.email "164028134+payments-api-gateway[bot]@users.noreply.github.com"
+
+      - name: Commitar e Fazer Push para a Main
+        run: |
+          if ! git diff-index --quiet HEAD; then
+            echo "Mudanças detectadas. Realizando commit e push..."
+            git add .
+            git commit -m "chore(rollback): Reverte arquivos modificados no PR #${{ inputs.pr_number_to_revert }}"
+            
+            echo "Fazendo push para a branch main..."
+            git push origin main
+            
+            echo "Criando e fazendo push da tag de rollback..."
+            TAG_NAME="rollback/pr-${{ inputs.pr_number_to_revert }}_$(date +"%Y%m%d%H%M%S")"
+            git tag $TAG_NAME
+            git push origin $TAG_NAME
+            echo "Rollback concluído e tag ${TAG_NAME} criada."
+          else
+            echo "Nenhuma mudança detectada no workspace. Nenhum commit será feito."
+          fi
