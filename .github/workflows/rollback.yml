@@ -131,7 +131,6 @@ jobs:
             GIT_DIFF="$(echo "$GIT_DIFF" | head -c 60000)\n\n... (diff truncado por ser muito longo)"
           fi
           
-          # Escreve o conteúdo Markdown no arquivo especial GITHUB_STEP_SUMMARY
           cat <<EOF >> $GITHUB_STEP_SUMMARY
           ## ⚠️ Aprovação Necessária para Rollback na \`main\`
           As seguintes alterações (reversão do PR #${{ inputs.pr_number_to_revert }}) serão commitadas diretamente na branch \`main\` após a sua aprovação.
@@ -155,9 +154,7 @@ jobs:
   wait-for-approval:
     runs-on: ubuntu-latest
     needs: [prepare-commit-and-diff]
-    environment: 
-      name: rollback-approval-pr-${{ inputs.pr_number_to_revert }}
-      url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    environment: ${{inputs.dynamic_environment}}
     steps:
       - name: Aguardando aprovação
         run: |
