@@ -46,17 +46,26 @@ jobs:
           JOB_CONCLUSION="success"
 
           if [[ -z "$TEAM_SLUG" ]]; then
-            MESSAGE_BODY="**ℹ️ Fluxo de Aprovação Padrão**\n\nNenhum label \`team:...\` encontrado. Ao ser mergeado, este PR seguirá pelo fluxo de aprovação padrão."
+            MESSAGE_BODY="**ℹ️ Fluxo de Aprovação Padrão**
+
+            Nenhum label \`team:...\` encontrado. Ao ser mergeado, este PR seguirá pelo fluxo de aprovação para o apply padrão (apenas time api gateway pode aprovar)."
           elif [[ "$GET_MEMBERS_OUTCOME" == "failure" ]]; then
-            # CASO 2: O Step 2 FALHOU (time não encontrado)
-            MESSAGE_BODY="**❌ Erro: Label de Time Inválido**\n\nO time \`$TEAM_SLUG\` especificado no label não foi encontrado na organização.\n\n**Ação Requerida**: Por favor, corrija o nome do time ou remova o label \`team:...\` para prosseguir."
+            MESSAGE_BODY="**❌ Erro: Label de Time Inválido**
+
+            O time \`$TEAM_SLUG\` especificado no label não foi encontrado na organização.
+            **Ação Requerida**: Por favor, corrija o nome do time no label \`team:...\` para prosseguir."
             JOB_CONCLUSION="failure"
           elif [[ -z "$TEAM_MEMBERS" ]]; then
-            MESSAGE_BODY="**❌ Erro: Time de Aprovadores Vazio**\n\nO time \`$TEAM_SLUG\` foi encontrado, mas não possui membros.\n\n**Ação Requerida**: Adicione membros ao time no GitHub ou use um label de um time diferente."
+            MESSAGE_BODY="**❌ Erro: Time de Aprovadores Vazio**
+
+            O time \`$TEAM_SLUG\` foi encontrado, mas não possui membros.
+            **Ação Requerida**: Adicione membros ao time no GitHub ou use um label de um time diferente."
             JOB_CONCLUSION="failure"
           else
             MEMBER_LIST=$(echo "$TEAM_MEMBERS" | sed 's/^/- @/')
-            MESSAGE_BODY="**✅ Time de Aprovadores Válido**\n\nO time \`$TEAM_SLUG\` foi localizado. Após o merge, o fluxo seguirá com os seguintes aprovadores (exceto o autor do PR):\n$MEMBER_LIST"
+            MESSAGE_BODY="**✅ Time de Aprovadores Válido**
+            
+            O time \`$TEAM_SLUG\` foi localizado. Após o merge, o fluxo seguirá com os seguintes aprovadores (exceto o autor do PR):\n$MEMBER_LIST"
           fi
           
           echo "message<<EOF" >> $GITHUB_OUTPUT
