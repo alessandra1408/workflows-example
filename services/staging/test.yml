@@ -18,6 +18,7 @@ services:
         methods:
           - POST
           - GET
+          - PUT
         protocols:
           - http
         paths:
