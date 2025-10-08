@@ -40,14 +40,15 @@ jobs:
 
             if [[ -n "$TEAM_SLUG" ]]; then
             echo "Label 'team:' encontrado. Validando time '${TEAM_SLUG}'..."
-            team_members=$(gh api "orgs/${{ github.repository_owner }}/teams/${TEAM_SLUG}/members" --jq '.[].login' || echo "API_CALL_FAILED")
-            
-            if [[ "$team_members" == "API_CALL_FAILED" ]]; then
+            team_members=$(gh api "orgs/${{ github.repository_owner }}/teams/${TEAM_SLUG}/members" --jq '.[].login' 2>/dev/null)
+            exit_code=$?
+
+            if [ $exit_code -ne 0 ]; then
               MESSAGE_BODY="**❌ Erro: Label de Time Inválido**
 
               O time \`$TEAM_SLUG\` especificado no label não foi encontrado na organização.
 
-              **Ação Requerida**: Por favor, corrija o nome do time no label \`team:...\` para prosseguir."
+              **Ação Requerida**: Por favor, corrija o nome do time ou remova o label \`team:...\` para prosseguir."
               JOB_CONCLUSION="failure"
             elif [[ -z "$team_members" ]]; then
               MESSAGE_BODY="**❌ Erro: Time de Aprovadores Vazio**
@@ -68,7 +69,7 @@ jobs:
 
               Nenhum label \`team:...\` encontrado. Ao ser mergeado, este PR seguirá pelo fluxo de aprovação padrão."
             fi
-            
+          
             echo "message<<EOF" >> $GITHUB_OUTPUT
             echo "$MESSAGE_BODY" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
