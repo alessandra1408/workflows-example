@@ -24,51 +24,55 @@ jobs:
           team_slug=$(echo "$LABELS_JSON" | jq -r '.[] | .name | select(startswith("team:")) | ltrimstr("team:")')
           echo "team_slug=${team_slug}" >> $GITHUB_OUTPUT
 
-      - name: '2. Buscar membros e preparar comentário'
-        id: prepare_message
+      - name: '2. Tentar buscar membros do time'
+        id: get_members
+        if: steps.get_team.outputs.team_slug != ''
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          TEAM_SLUG: ${{ steps.get_team.outputs.team_slug }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-            MESSAGE_BODY=""
-            JOB_CONCLUSION="success"
+          echo "Buscando membros para o time: ${{ steps.get_team.outputs.team_slug }}"
+          # O comando agora joga sua saída para um output do step
+          members_list=$(gh api "orgs/${{ github.repository_owner }}/teams/${{ steps.get_team.outputs.team_slug }}/members" --jq '.[].login')
+          echo "members=$members_list" >> $GITHUB_OUTPUT
+        continue-on-error: true
 
-            if [[ -n "$TEAM_SLUG" ]]; then
-            echo "Label 'team:' encontrado. Validando time '${TEAM_SLUG}'..."
-            exit_code=0
-            # A construção 'if ! command' permite que 'gh api' falhe sem parar o script
-            if ! team_members=$(gh api "orgs/${{ github.repository_owner }}/teams/${TEAM_SLUG}/members" --jq '.[].login' 2>/dev/null); then
-              exit_code=$?
-            fi
+      - name: '3. Preparar comentário com base no resultado'
+        id: prepare_comment
+        run: |
+          TEAM_SLUG="${{ steps.get_team.outputs.team_slug }}"
+          GET_MEMBERS_OUTCOME="${{ steps.get_members.outcome }}"
+          TEAM_MEMBERS='${{ steps.get_members.outputs.members }}'
+          MESSAGE_BODY=""
+          JOB_CONCLUSION="success"
 
-            if [ $exit_code -ne 0 ]; then
-              MESSAGE_BODY="**❌ Erro: Label de Time Inválido**\n\nO time \`$TEAM_SLUG\` especificado no label não foi encontrado na organização.\n\n**Ação Requerida**: Por favor, corrija o nome do time no label \`team:...\` para prosseguir."
-              JOB_CONCLUSION="failure"
-            elif [[ -z "$team_members" ]]; then
-              MESSAGE_BODY="**❌ Erro: Time de Aprovadores Vazio**\n\nO time \`$TEAM_SLUG\` foi encontrado, mas não possui membros.\n\n**Ação Requerida**: Adicione membros ao time no GitHub ou use um label de um time diferente."
-              JOB_CONCLUSION="failure"
-            else
-              MEMBER_LIST=$(echo "$team_members" | sed 's/^/- @/')
-              MESSAGE_BODY="**✅ Time de Aprovadores Válido**\n\nO time \`$TEAM_SLUG\` foi localizado. Após o merge, o fluxo seguirá com os seguintes aprovadores (exceto o autor do PR):\n$MEMBER_LIST"
-            fi
-            else
-              MESSAGE_BODY="**ℹ️ Fluxo de Aprovação Padrão**\n\nNenhum label \`team:...\` encontrado. Ao ser mergeado, este PR seguirá pelo fluxo de aprovação padrão."
-            fi
-            
-            echo "message<<EOF" >> $GITHUB_OUTPUT
-            echo "$MESSAGE_BODY" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            echo "conclusion=$JOB_CONCLUSION" >> $GITHUB_OUTPUT
+          if [[ -z "$TEAM_SLUG" ]]; then
+            MESSAGE_BODY="**ℹ️ Fluxo de Aprovação Padrão**\n\nNenhum label \`team:...\` encontrado. Ao ser mergeado, este PR seguirá pelo fluxo de aprovação padrão."
+          elif [[ "$GET_MEMBERS_OUTCOME" == "failure" ]]; then
+            # CASO 2: O Step 2 FALHOU (time não encontrado)
+            MESSAGE_BODY="**❌ Erro: Label de Time Inválido**\n\nO time \`$TEAM_SLUG\` especificado no label não foi encontrado na organização.\n\n**Ação Requerida**: Por favor, corrija o nome do time ou remova o label \`team:...\` para prosseguir."
+            JOB_CONCLUSION="failure"
+          elif [[ -z "$TEAM_MEMBERS" ]]; then
+            MESSAGE_BODY="**❌ Erro: Time de Aprovadores Vazio**\n\nO time \`$TEAM_SLUG\` foi encontrado, mas não possui membros.\n\n**Ação Requerida**: Adicione membros ao time no GitHub ou use um label de um time diferente."
+            JOB_CONCLUSION="failure"
+          else
+            MEMBER_LIST=$(echo "$TEAM_MEMBERS" | sed 's/^/- @/')
+            MESSAGE_BODY="**✅ Time de Aprovadores Válido**\n\nO time \`$TEAM_SLUG\` foi localizado. Após o merge, o fluxo seguirá com os seguintes aprovadores (exceto o autor do PR):\n$MEMBER_LIST"
+          fi
+          
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$MESSAGE_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "conclusion=$JOB_CONCLUSION" >> $GITHUB_OUTPUT
 
-      - name: '3. Publicar ou atualizar comentário no PR'
+      - name: '4. Publicar ou atualizar comentário no PR'
         uses: marocchino/sticky-pull-request-comment@v2
         if: always()
         with:
           header: team-label-validation
-          message: ${{ steps.prepare_message.outputs.message }}
+          message: ${{ steps.prepare_comment.outputs.message }}
 
-      - name: '4. Forçar falha do job se a validação falhou'
-        if: steps.prepare_message.outputs.conclusion == 'failure'
+      - name: '5. Forçar falha do job se a validação falhou'
+        if: steps.prepare_comment.outputs.conclusion == 'failure'
         run: |
           echo "::error::A validação do label do time falhou. Verifique o comentário no PR para mais detalhes."
           exit 1
