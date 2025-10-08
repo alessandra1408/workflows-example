@@ -25,10 +25,12 @@ jobs:
       env_name: ${{ steps.determine_env.outputs.env_name }}
       files_to_apply: ${{ steps.get_files.outputs.files }}
     steps:
-      - name: Checkout código
+      - name: Checkout da branch principal
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: 'main'
+          fetch-depth: 0
 
       - name: 'DEBUG: Listar histórico do git'
         run: |
@@ -180,4 +182,8 @@ jobs:
           ENV_NAME: ${{ needs.setup_environment.outputs.env_name }}
         run: |
           echo "Limpando o ambiente de decisão: ${ENV_NAME}"
+          if [[ "$ENV_NAME" == "tech-approve" ]]; then
+            echo "Ambiente padrão 'tech-approve' não será deletado."
+            exit 0
+          fi
           gh api --method DELETE "repos/${{ github.repository }}/environments/${ENV_NAME}"

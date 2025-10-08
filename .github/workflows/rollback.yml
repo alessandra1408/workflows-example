@@ -103,6 +103,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: 'main'
+          fetch-depth: 0
 
       - name: Reverter arquivos para gerar o diff
         id: revert
@@ -170,6 +171,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: 'main'
+          fetch-depth: 0
 
       - name: Baixar artefato com arquivos revertidos
         uses: actions/download-artifact@v4
