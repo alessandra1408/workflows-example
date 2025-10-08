@@ -39,18 +39,34 @@ jobs:
             JOB_CONCLUSION="success"
 
             if [[ -n "$TEAM_SLUG" ]]; then
-                echo "Label 'team:' encontrado. Validando time '${TEAM_SLUG}'..."
-                team_members=$(gh api "orgs/${{ github.repository_owner }}/teams/${TEAM_SLUG}/members" --jq '.[].login' || true)
-                
-                if [[ -z "$team_members" ]]; then
-                    MESSAGE_BODY="**❌ Erro: Label de Time Inválido**\n\nO time \`$TEAM_SLUG\` especificado no label não foi encontrado ou não possui membros.\n\n**Ação Requerida**: Por favor, corrija o nome do time no label \`team:...\` para prosseguir."
-                    JOB_CONCLUSION="failure"
-                else
-                    MEMBER_LIST=$(echo "$team_members" | sed 's/^/- @/')
-                    MESSAGE_BODY="**✅ Time de Aprovadores Válido**\n\nO time \`$TEAM_SLUG\` foi localizado. Após o merge, o fluxo seguirá com os seguintes aprovadores (exceto o autor do pr):\n$MEMBER_LIST"
-                fi
+            echo "Label 'team:' encontrado. Validando time '${TEAM_SLUG}'..."
+            team_members=$(gh api "orgs/${{ github.repository_owner }}/teams/${TEAM_SLUG}/members" --jq '.[].login' || echo "API_CALL_FAILED")
+            
+            if [[ "$team_members" == "API_CALL_FAILED" ]]; then
+              MESSAGE_BODY="**❌ Erro: Label de Time Inválido**
+
+              O time \`$TEAM_SLUG\` especificado no label não foi encontrado na organização.
+
+              **Ação Requerida**: Por favor, corrija o nome do time no label \`team:...\` para prosseguir."
+              JOB_CONCLUSION="failure"
+            elif [[ -z "$team_members" ]]; then
+              MESSAGE_BODY="**❌ Erro: Time de Aprovadores Vazio**
+
+              O time \`$TEAM_SLUG\` foi encontrado, mas não possui membros.
+
+              **Ação Requerida**: Adicione membros ao time no GitHub ou use um label de um time diferente."
+              JOB_CONCLUSION="failure"
             else
-                MESSAGE_BODY="**ℹ️ Fluxo de Aprovação Padrão**\n\nNenhum label \`team:...\` encontrado. Ao ser mergeado, este PR seguirá pelo fluxo de aprovação padrão."
+              MEMBER_LIST=$(echo "$team_members" | sed 's/^/- @/')
+              MESSAGE_BODY="**✅ Time de Aprovadores Válido**
+
+              O time \`$TEAM_SLUG\` foi localizado. Após o merge, o fluxo seguirá com os seguintes aprovadores (exceto o autor do PR):
+              $MEMBER_LIST"
+            fi
+            else
+              MESSAGE_BODY="**ℹ️ Fluxo de Aprovação Padrão**
+
+              Nenhum label \`team:...\` encontrado. Ao ser mergeado, este PR seguirá pelo fluxo de aprovação padrão."
             fi
             
             echo "message<<EOF" >> $GITHUB_OUTPUT
