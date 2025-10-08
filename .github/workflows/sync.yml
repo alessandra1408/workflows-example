@@ -183,7 +183,7 @@ jobs:
         run: |
           echo "Limpando o ambiente de decisão: ${ENV_NAME}"
           if [[ "$ENV_NAME" == "tech-approve" ]]; then
-            echo "Ambiente padrão 'tech-approve' não será deletado."
+            echo "::notice::Ambiente padrão 'tech-approve' não será deletado."
             exit 0
           fi
           gh api --method DELETE "repos/${{ github.repository }}/environments/${ENV_NAME}"

@@ -109,11 +109,17 @@ jobs:
         id: revert
         run: |
           echo "Revertendo arquivos para gerar o diff..."
-          FILES_TO_REVERT=$(echo '${{ inputs.files_to_apply }}' | jq -r '.[] | @sh' | tr '\n' ' ')
-          if [[ -z "$FILES_TO_REVERT" ]]; then
+          
+          mapfile -t files_to_revert < <(echo '${{ inputs.files_to_apply }}' | jq -r '.[]')
+          
+          if [ ${#files_to_revert[@]} -eq 0 ]; then
+            echo "Nenhum arquivo especificado para reverter."
             echo "COMMIT_HAS_CHANGES=false" >> $GITHUB_OUTPUT
           else
-            git checkout ${{ inputs.stable_commit_sha }} -- $FILES_TO_REVERT
+            echo "Arquivos a serem revertidos:"
+            printf " - %s\n" "${files_to_revert[@]}"
+            
+            git checkout ${{ inputs.stable_commit_sha }} -- "${files_to_revert[@]}"
             echo "COMMIT_HAS_CHANGES=true" >> $GITHUB_OUTPUT
           fi
 
