@@ -88,7 +88,7 @@ jobs:
         run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
 
   apply:
-    runs-on: ubuntu-latest-on-demand
+    runs-on: ubuntu-latest
     needs: [select-files, approve]
     environment: ${{ inputs.environment }}
     strategy:
