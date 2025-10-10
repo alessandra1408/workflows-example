@@ -68,9 +68,7 @@ jobs:
     environment: ${{ matrix.environment }}
     strategy:
       fail-fast: false
-      matrix:
-        file: ${{ fromJson(inputs.files_to_apply) }}
-        include: ${{ fromJson(needs.prepare-matrix.outputs.matrix_config) }}
+      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix_config) }}
     steps:
       - name: Checkout Code at Correct Version
         uses: actions/checkout@v4
@@ -80,6 +78,15 @@ jobs:
       - uses: kong/setup-deck@v1
         with:
           deck-version: 1.47.1
+
+      - name: Deck Sync to ${{ matrix.region_name }} (${{ matrix.region }})
+        if: ${{ success() }}
+        id: sync
+        env:
+          TESTE: ${{ secrets[matrix.env].TESTE }}
+        run: |
+          echo "Iniciando rollback na região: ${{ matrix.region }} (Nome: ${{ matrix.region_name }}) para o ambiente: ${{ matrix.environment }}"
+          echo "Valor da secret TESTE: $TESTE"
 
       - name: validate 
         run: |
