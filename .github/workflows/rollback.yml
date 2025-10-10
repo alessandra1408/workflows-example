@@ -52,21 +52,28 @@ jobs:
       - name: Generate paired matrix from input strings
         id: set-matrix
         run: |
+          # 1. Prepara a matriz de ambientes/regiões (esta parte já está correta)
           env_matrix_json=$(paste -d ',' \
             <(echo "${{ inputs.region }}" | tr ',' '\n') \
             <(echo "${{ inputs.region_name }}" | tr ',' '\n') \
             <(echo "${{ inputs.environment }}" | tr ',' '\n') \
-            | jq -Rsc 'split("\n") | map(select(. != "")) | map(split(",")) | map({region: .[0], region_name: .[1], environment: .[2]})' | tr -d '\n\r ')
+            | jq -Rsc 'split("\n") | map(select(. != "")) | map(split(",")) | map({region: .[0], region_name: .[1], environment: .[2]})')
 
-          files_json=$(echo "${{ inputs.files_to_apply }}" | jq -Rsc 'split("\n") | map(select(. != ""))' | tr -d '\n\r ')
+          # 2. Prepara a lista de arquivos como um ARRAY JSON
+          #    Cada linha do input vira um item no array.
+          files_json=$(echo "${{ inputs.files_to_apply }}" | jq -R . | jq -s .)
 
+          # 3. Cria a matriz final completa, combinando cada arquivo com cada ambiente
           matrix_json=$(jq -n --argjson files "$files_json" --argjson envs "$env_matrix_json" \
-            '[$files[] as $file | $envs[] as $env | $env + {file: $file}]' | tr -d '\n\r ')
+            '[$files[] as $file | $envs[] as $env | $env + {file: $file}]')
+          
+          # 4. Remove quebras de linha para a saída (output)
+          matrix_json_oneline=$(echo "$matrix_json" | tr -d '\n\r ')
 
+          # 5. Define a matriz completa como a saída do job
           echo "Matriz de configuração gerada:"
           echo "$matrix_json" | jq .
-          echo "matrix_config=$matrix_json" >> $GITHUB_OUTPUT
-
+          echo "matrix_config=$matrix_json_oneline" >> $GITHUB_OUTPUT
   rollback:
     runs-on: ubuntu-latest
     needs: [prepare-matrix]
