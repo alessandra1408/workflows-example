@@ -56,12 +56,12 @@ jobs:
             <(echo "${{ inputs.region }}" | tr ',' '\n') \
             <(echo "${{ inputs.region_name }}" | tr ',' '\n') \
             <(echo "${{ inputs.environment }}" | tr ',' '\n') \
-            | jq -Rsc 'split("\n") | map(select(. != "")) | map(split(",")) | map({region: .[0], region_name: .[1], environment: .[2]})')
+            | jq -Rsc 'split("\n") | map(select(. != "")) | map(split(",")) | map({region: .[0], region_name: .[1], environment: .[2]})' | tr -d '\n\r ')
 
-          files_json=$(echo "${{ inputs.files_to_apply }}" | jq -Rsc 'split("\n") | map(select(. != ""))')
+          files_json=$(echo "${{ inputs.files_to_apply }}" | jq -Rsc 'split("\n") | map(select(. != ""))' | tr -d '\n\r ')
 
           matrix_json=$(jq -n --argjson files "$files_json" --argjson envs "$env_matrix_json" \
-            '[$files[] as $file | $envs[] as $env | $env + {file: $file}]')
+            '[$files[] as $file | $envs[] as $env | $env + {file: $file}]' | tr -d '\n\r ')
 
           echo "Matriz de configuração gerada:"
           echo "$matrix_json" | jq .
