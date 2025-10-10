@@ -52,16 +52,16 @@ jobs:
       - name: Generate paired matrix from input strings
         id: set-matrix
         run: |
-          # 1. Prepara a matriz de ambientes/regiões (esta parte já está correta)
+          # 1. Prepara a matriz de ambientes/regiões
           env_matrix_json=$(paste -d ',' \
             <(echo "${{ inputs.region }}" | tr ',' '\n') \
             <(echo "${{ inputs.region_name }}" | tr ',' '\n') \
             <(echo "${{ inputs.environment }}" | tr ',' '\n') \
             | jq -Rsc 'split("\n") | map(select(. != "")) | map(split(",")) | map({region: .[0], region_name: .[1], environment: .[2]})')
 
-          # 2. Prepara a lista de arquivos como um ARRAY JSON
-          #    Cada linha do input vira um item no array.
-          files_json=$(echo "${{ inputs.files_to_apply }}" | jq -R . | jq -s .)
+          # 2. Prepara a lista de arquivos como um ARRAY JSON (Forma Corrigida)
+          #    Primeiro, troca as vírgulas por quebras de linha, depois passa para o jq
+          files_json=$(echo "${{ inputs.files_to_apply }}" | tr ',' '\n' | jq -R . | jq -s .)
 
           # 3. Cria a matriz final completa, combinando cada arquivo com cada ambiente
           matrix_json=$(jq -n --argjson files "$files_json" --argjson envs "$env_matrix_json" \
