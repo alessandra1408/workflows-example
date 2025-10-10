@@ -166,7 +166,7 @@ jobs:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
-      region: us-east-1,us-east-1-02
+      region: us-east-1,us-east-1
       region_name: virginia,virginia
       environment: config-us-east-1-stg,config-us-east-1-stg-02
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
