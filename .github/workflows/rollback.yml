@@ -52,25 +52,38 @@ jobs:
       - name: Generate paired matrix from input strings
         id: set-matrix
         run: |
-          # 1. Prepara a matriz de ambientes/regiões
-          env_matrix_json=$(paste -d ',' \
-            <(echo "${{ inputs.region }}" | tr ',' '\n') \
-            <(echo "${{ inputs.region_name }}" | tr ',' '\n') \
-            <(echo "${{ inputs.environment }}" | tr ',' '\n') \
-            | jq -Rsc 'split("\n") | map(select(. != "")) | map(split(",")) | map({region: .[0], region_name: .[1], environment: .[2]})')
+          # 1. Armazena os inputs em variáveis para clareza
+          FILES_INPUT="${{ inputs.files_to_apply }}"
+          ENVS_INPUT="${{ inputs.environment }}"
+          REGIONS_INPUT="${{ inputs.region }}"
+          REGION_NAMES_INPUT="${{ inputs.region_name }}"
 
-          # 2. Itera sobre cada arquivo e cada ambiente para criar a matriz final
-          final_matrix="[]"
-          for file in ${{ inputs.files_to_apply }}; do
-            final_matrix=$(echo "$final_matrix" | jq -c --arg file "$file" --argjson envs "$env_matrix_json" '. + ($envs | map(. + {file: $file}))')
-          done
+          # 2. Usa JQ para construir a matriz completa a partir das strings de input
+          matrix_json=$(jq -n \
+            --arg files "$FILES_INPUT" \
+            --arg envs "$ENVS_INPUT" \
+            --arg regions "$REGIONS_INPUT" \
+            --arg region_names "$REGION_NAMES_INPUT" \
+            '
+            # Quebra as strings de input em arrays
+            ($files | split(",")) as $f |
+            ($envs | split(",")) as $e |
+            ($regions | split(",")) as $r |
+            ($region_names | split(",")) as $rn |
+            
+            # Cria a matriz de ambientes
+            [range($e | length) as $i | {environment: $e[$i], region: $r[$i], region_name: $rn[$i]}] as $env_matrix |
+
+            # Cria a matriz final combinando cada arquivo com cada ambiente
+            [$f[] as $file | $env_matrix[] as $env | $env + {file: $file}]
+            ')
           
           # 3. Remove quebras de linha para a saída (output)
-          matrix_json_oneline=$(echo "$final_matrix" | tr -d '\n\r ')
+          matrix_json_oneline=$(echo "$matrix_json" | tr -d '\n\r ')
 
           # 4. Define a matriz completa como a saída do job
           echo "Matriz de configuração gerada:"
-          echo "$final_matrix" | jq .
+          echo "$matrix_json" | jq .
           echo "matrix_config=$matrix_json_oneline" >> $GITHUB_OUTPUT
   rollback:
     runs-on: ubuntu-latest
