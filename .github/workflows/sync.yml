@@ -241,7 +241,7 @@ jobs:
 
 
   show_changes_two_regions:
-    needs: [setup_environment, us_east_1]
+    needs: [setup_environment, us_east_1_b]
     runs-on: ubuntu-latest
     outputs:
       commit_has_changes: ${{ steps.revert.outputs.commit_has_changes }}
@@ -300,7 +300,7 @@ jobs:
         if: ${{ steps.revert.outputs.commit_has_changes }} == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: reverted-files
+          name: reverted-files-two-regions
           path: .
 
   approve_rollback_two_regions:
