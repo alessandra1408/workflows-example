@@ -46,7 +46,7 @@ jobs:
         run: |
           echo "Revertendo arquivos para gerar o diff..."
           
-          mapfile -t files_to_revert < <(echo '${{ inputs.files_to_apply }}' | jq -r '.[]')
+          readarray -t files_to_revert < <(echo '${{ inputs.files_to_apply }}' | jq -r '.[]')
           
           if [ ${#files_to_revert[@]} -eq 0 ]; then
             echo "Nenhum arquivo especificado para reverter."

@@ -143,6 +143,7 @@ jobs:
       region: us-east-1
       region_name: virginia
       environment: "config-us-east-1-stg"
+      is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
@@ -188,6 +189,7 @@ jobs:
       region: us-east-1
       region_name: virginia
       environment: "config-us-east-1-stg"
+      is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
@@ -200,6 +202,7 @@ jobs:
       region: us-east-1
       region_name: virginia
       environment: "config-us-east-1-stg-02"
+      is_rollback: true
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
 

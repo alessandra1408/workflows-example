@@ -33,6 +33,11 @@ on:
         type: string
         description: "SHA do commit estável"
         required: false
+      is_rollback:
+        type: boolean
+        description: "Flag to indicate if it's a rollback"
+        required: false
+        default: false
 
 jobs:
   start_job:
@@ -45,6 +50,7 @@ jobs:
 
   approve:
     runs-on: ubuntu-latest
+    if: ${{ inputs.is_rollback == false }}
     needs: [start_job]
     environment: ${{ inputs.dynamic_environment }}
     steps:
