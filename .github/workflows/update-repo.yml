@@ -23,91 +23,16 @@ on:
         type: string
         description: "The name of dynamic environment"
         required: true
+      commit_has_changes:
+        type: boolean
+        description: "Flag to indicate if the commit has changes"
+        required: true
+        default: false
 
 jobs:
-  prepare-commit-and-diff:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      deployments: write
-    outputs:
-      COMMIT_HAS_CHANGES: ${{ steps.revert.outputs.COMMIT_HAS_CHANGES }}
-    steps:
-      - name: Checkout da branch principal
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          ref: 'main'
-          fetch-depth: 0
-
-      - name: Reverter arquivos para gerar o diff
-        id: revert
-        run: |
-          echo "Revertendo arquivos para gerar o diff..."
-          
-          readarray -t files_to_revert < <(echo '${{ inputs.files_to_apply }}' | jq -r '.[]')
-          
-          for file in "${files_to_revert[@]}"; do
-            # Verifica se o arquivo existia no commit antigo
-            if git cat-file -e "${{ inputs.stable_commit_sha }}:$file" &>/dev/null; then
-              # Se existia, reverte a modificação
-              echo "Revertendo modificação em: $file"
-              git checkout "${{ inputs.stable_commit_sha }}" -- "$file"
-            else
-              # Se NÃO existia (era um arquivo novo), a reversão é removê-lo
-              echo "Removendo arquivo novo: $file"
-              git rm -- "$file"
-            fi
-          done
-
-          echo "COMMIT_HAS_CHANGES=true" >> $GITHUB_OUTPUT
-
-      - name: Publicar diff no Job Summary
-        if: ${{ steps.revert.outputs.COMMIT_HAS_CHANGES }} == 'true'
-        run: |
-          GIT_DIFF=$(git diff --color=never HEAD)
-          if [ ${#GIT_DIFF} -gt 60000 ]; then
-            GIT_DIFF="$(echo "$GIT_DIFF" | head -c 60000)\n\n... (diff truncado por ser muito longo)"
-          fi
-          
-          cat <<EOF >> $GITHUB_STEP_SUMMARY
-          ## ⚠️ Aprovação Necessária para Rollback na \`main\`
-          As seguintes alterações (reversão do PR #${{ inputs.pr_number_to_revert }}) serão commitadas diretamente na branch \`main\` após a sua aprovação.
-          <details><summary>Clique para ver o diff completo</summary>
-          
-          \`\`\`diff
-          $GIT_DIFF
-          \`\`\`
-          </details>
-          
-          **Por favor, revise cuidadosamente e aprove o passo seguinte para continuar.**
-          EOF
-
-      - name: Salvar alterações como artefato
-        if: ${{ steps.revert.outputs.COMMIT_HAS_CHANGES }} == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: reverted-files
-          path: .
-
-  wait-for-approval:
-    runs-on: ubuntu-latest
-    needs: [prepare-commit-and-diff]
-    environment: ${{inputs.dynamic_environment}}
-    steps:
-      - name: Aguardando aprovação
-        run: |
-          if [[ "${{ needs.prepare-commit-and-diff.outputs.COMMIT_HAS_CHANGES }}" == "false" ]]; then
-            echo "Nenhuma mudança para reverter. Aprovação não é necessária."
-          else
-            echo "Aprovação concedida. Prosseguindo com o commit para a 'main'."
-          fi
-
   execute-commit:
     runs-on: ubuntu-latest
-    needs: [wait-for-approval, prepare-commit-and-diff]
-    if: needs.prepare-commit-and-diff.outputs.COMMIT_HAS_CHANGES == 'true'
+    if: ${{ inputs.commit_has_changes }} == 'true'
     steps:
       - name: Checkout da branch principal (para contexto Git)
         uses: actions/checkout@v4

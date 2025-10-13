@@ -132,9 +132,61 @@ jobs:
     needs: [setup_environment, us_east_1]
     runs-on: ubuntu-latest
     environment: ${{needs.setup_environment.outputs.env_name}}
+    outputs:
+      commit_has_changes: ${{ steps.revert.outputs.commit_has_changes }}
     steps:
       - name: Aprovar Mudanças
         run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
+      
+      - name: Reverter arquivos para gerar o diff
+        id: revert
+        run: |
+          echo "Revertendo arquivos para gerar o diff..."
+
+          readarray -t files_to_revert < <(echo '${{ needs.setup_environment.outputs.files_to_apply }}' | jq -r '.[]')
+
+          for file in "${files_to_revert[@]}"; do
+            # Verifica se o arquivo existia no commit antigo
+            if git cat-file -e "${{ needs.setup_environment.outputs.stable_commit_sha }}:$file" &>/dev/null; then
+              # Se existia, reverte a modificação
+              echo "Revertendo modificação em: $file"
+              git checkout "${{ needs.setup_environment.outputs.stable_commit_sha }}" -- "$file"
+            else
+              # Se NÃO existia (era um arquivo novo), a reversão é removê-lo
+              echo "Removendo arquivo novo: $file"
+              git rm -- "$file"
+            fi
+          done
+
+          echo "commit_has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Publicar diff no Job Summary
+        if: ${{ steps.revert.outputs.commit_has_changes }} == 'true'
+        run: |
+          GIT_DIFF=$(git diff --color=never HEAD)
+          if [ ${#GIT_DIFF} -gt 60000 ]; then
+            GIT_DIFF="$(echo "$GIT_DIFF" | head -c 60000)\n\n... (diff truncado por ser muito longo)"
+          fi
+          
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ## ⚠️ Aprovação Necessária para Rollback na \`main\`
+          As seguintes alterações (reversão do PR #${{needs.setup_environment.outputs.pr_number}}) serão commitadas diretamente na branch \`main\` após a sua aprovação.
+          <details><summary>Clique para ver o diff completo</summary>
+          
+          \`\`\`diff
+          $GIT_DIFF
+          \`\`\`
+          </details>
+          
+          **Por favor, revise cuidadosamente e aprove o passo seguinte para continuar.**
+          EOF
+
+      - name: Salvar alterações como artefato
+        if: ${{ steps.revert.outputs.commit_has_changes }} == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reverted-files
+          path: .
 
   trigger_rollback_us_east_1:
     needs: [setup_environment, us_east_1, approve_rollback_one_region]
@@ -157,6 +209,7 @@ jobs:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      commit_has_changes: ${{ needs.approve_rollback_one_region.outputs.commit_has_changes }}
 
   us_east_1_b:
     needs: [setup_environment, us_east_1, approve_rollback_one_region]
@@ -182,9 +235,61 @@ jobs:
       (needs.setup_environment.result == 'success')
     runs-on: ubuntu-latest
     environment: ${{needs.setup_environment.outputs.env_name}}
+    outputs:
+      commit_has_changes: ${{ steps.revert.outputs.commit_has_changes }}
     steps:
       - name: Aprovar Mudanças
         run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
+
+      - name: Reverter arquivos para gerar o diff
+        id: revert
+        run: |
+          echo "Revertendo arquivos para gerar o diff..."
+
+          readarray -t files_to_revert < <(echo '${{ needs.setup_environment.outputs.files_to_apply }}' | jq -r '.[]')
+
+          for file in "${files_to_revert[@]}"; do
+            # Verifica se o arquivo existia no commit antigo
+            if git cat-file -e "${{ needs.setup_environment.outputs.stable_commit_sha }}:$file" &>/dev/null; then
+              # Se existia, reverte a modificação
+              echo "Revertendo modificação em: $file"
+              git checkout "${{ needs.setup_environment.outputs.stable_commit_sha }}" -- "$file"
+            else
+              # Se NÃO existia (era um arquivo novo), a reversão é removê-lo
+              echo "Removendo arquivo novo: $file"
+              git rm -- "$file"
+            fi
+          done
+
+          echo "commit_has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Publicar diff no Job Summary
+        if: ${{ steps.revert.outputs.commit_has_changes }} == 'true'
+        run: |
+          GIT_DIFF=$(git diff --color=never HEAD)
+          if [ ${#GIT_DIFF} -gt 60000 ]; then
+            GIT_DIFF="$(echo "$GIT_DIFF" | head -c 60000)\n\n... (diff truncado por ser muito longo)"
+          fi
+          
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ## ⚠️ Aprovação Necessária para Rollback na \`main\`
+          As seguintes alterações (reversão do PR #${{needs.setup_environment.outputs.pr_number}}) serão commitadas diretamente na branch \`main\` após a sua aprovação.
+          <details><summary>Clique para ver o diff completo</summary>
+          
+          \`\`\`diff
+          $GIT_DIFF
+          \`\`\`
+          </details>
+          
+          **Por favor, revise cuidadosamente e aprove o passo seguinte para continuar.**
+          EOF
+
+      - name: Salvar alterações como artefato
+        if: ${{ steps.revert.outputs.commit_has_changes }} == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reverted-files
+          path: .
 
   trigger_rollback_us_east_1_second_job:
     needs: [setup_environment, us_east_1_b, approve_rollback_two_regions]
@@ -233,6 +338,7 @@ jobs:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      commit_has_changes: ${{ needs.approve_rollback_two_regions.outputs.commit_has_changes }}
 
   cleanup_environment:
     runs-on: ubuntu-latest
