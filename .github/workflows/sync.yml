@@ -128,16 +128,12 @@ jobs:
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
 
-  approve_rollback_one_region:
+  show_changes:
     needs: [setup_environment, us_east_1]
     runs-on: ubuntu-latest
-    environment: ${{needs.setup_environment.outputs.env_name}}
     outputs:
       commit_has_changes: ${{ steps.revert.outputs.commit_has_changes }}
     steps:
-      - name: Aprovar Mudanças
-        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
-      
       - name: Reverter arquivos para gerar o diff
         id: revert
         run: |
@@ -188,6 +184,15 @@ jobs:
           name: reverted-files
           path: .
 
+  approve_rollback_one_region:
+    needs: [setup_environment, us_east_1]
+    runs-on: ubuntu-latest
+    environment: ${{needs.setup_environment.outputs.env_name}}
+    steps:
+      - name: Aprovar Mudanças
+        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
+      
+
   trigger_rollback_us_east_1:
     needs: [setup_environment, us_east_1, approve_rollback_one_region]
     uses: ./.github/workflows/sync-regions.yml
@@ -201,7 +206,7 @@ jobs:
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
 
   commit_main_changes:
-    needs: [setup_environment, approve_rollback_one_region, trigger_rollback_us_east_1]
+    needs: [setup_environment, approve_rollback_one_region, trigger_rollback_us_east_1, show_changes]
     if: needs.trigger_rollback_us_east_1.result == 'success'
     uses: ./.github/workflows/update-repo.yml
     with:
@@ -209,7 +214,7 @@ jobs:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
-      commit_has_changes: ${{ needs.approve_rollback_one_region.outputs.commit_has_changes }}
+      commit_has_changes: ${{ needs.show_changes.outputs.commit_has_changes }}
 
   us_east_1_b:
     needs: [setup_environment, us_east_1, approve_rollback_one_region]
@@ -227,20 +232,13 @@ jobs:
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
 
-  approve_rollback_two_regions:
-    needs: [setup_environment, us_east_1_b]
-    if: |
-      always() &&
-      (needs.us_east_1_b.result == 'success') &&
-      (needs.setup_environment.result == 'success')
+
+  show_changes_two_regions:
+    needs: [setup_environment, us_east_1]
     runs-on: ubuntu-latest
-    environment: ${{needs.setup_environment.outputs.env_name}}
     outputs:
       commit_has_changes: ${{ steps.revert.outputs.commit_has_changes }}
     steps:
-      - name: Aprovar Mudanças
-        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
-
       - name: Reverter arquivos para gerar o diff
         id: revert
         run: |
@@ -290,6 +288,18 @@ jobs:
         with:
           name: reverted-files
           path: .
+
+  approve_rollback_two_regions:
+    needs: [setup_environment, us_east_1_b]
+    if: |
+      always() &&
+      (needs.us_east_1_b.result == 'success') &&
+      (needs.setup_environment.result == 'success')
+    runs-on: ubuntu-latest
+    environment: ${{needs.setup_environment.outputs.env_name}}
+    steps:
+      - name: Aprovar Mudanças
+        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
 
   trigger_rollback_us_east_1_second_job:
     needs: [setup_environment, us_east_1_b, approve_rollback_two_regions]
@@ -326,7 +336,7 @@ jobs:
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
 
   commit_main_changes_second_job:
-    needs: [setup_environment, trigger_rollback_us_east_1_second_job, trigger_rollback_us_east_1_b, approve_rollback_two_regions]
+    needs: [setup_environment, trigger_rollback_us_east_1_second_job, trigger_rollback_us_east_1_b, approve_rollback_two_regions, show_changes_two_regions]
     if: | 
       always() &&
       (needs.approve_rollback_two_regions.result == 'success') &&
@@ -338,7 +348,7 @@ jobs:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
-      commit_has_changes: ${{ needs.approve_rollback_two_regions.outputs.commit_has_changes }}
+      commit_has_changes: ${{ needs.show_changes_two_regions.outputs.commit_has_changes }}
 
   cleanup_environment:
     runs-on: ubuntu-latest
