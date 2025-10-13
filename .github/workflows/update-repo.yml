@@ -48,12 +48,18 @@ jobs:
           
           readarray -t files_to_revert < <(echo '${{ inputs.files_to_apply }}' | jq -r '.[]')
           
-          if [ ${#files_to_revert[@]} -eq 0 ]; then
-            echo "Nenhum arquivo especificado para reverter."
-            echo "COMMIT_HAS_CHANGES=false" >> $GITHUB_OUTPUT
-          else
-            echo "Arquivos a serem revertidos:"
-            printf " - %s\n" "${files_to_revert[@]}"
+           for file in "${files_to_revert[@]}"; do
+            # Verifica se o arquivo existia no commit antigo
+            if git cat-file -e "${{ inputs.stable_commit_sha }}:$file" &>/dev/null; then
+              # Se existia, reverte a modificação
+              echo "Revertendo modificação em: $file"
+              git checkout "${{ inputs.stable_commit_sha }}" -- "$file"
+            else
+              # Se NÃO existia (era um arquivo novo), a reversão é removê-lo
+              echo "Removendo arquivo novo: $file"
+              git rm -- "$file"
+            fi
+          done
             
             git checkout ${{ inputs.stable_commit_sha }} -- "${files_to_revert[@]}"
             echo "COMMIT_HAS_CHANGES=true" >> $GITHUB_OUTPUT
