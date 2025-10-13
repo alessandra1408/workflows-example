@@ -52,17 +52,6 @@ services:
           unzip_request: true
           zip_response: true
     routes:
-      - name: payment-card-cancel-api-healthcheck
-        protocols:
-          - http
-        hosts:
-          - payments.stone.com.br
-          - payments-stg.stone.com.br
-        paths:
-          - /health_check
-        methods:
-          - GET
-        strip_path: false
       - name: payment-card-cancel-api-v1-cancel
         protocols:
           - http
@@ -70,9 +59,10 @@ services:
           - payments.stone.com.br
           - payments-stg.stone.com.br
         paths:
-          - ~/v1/charges?/cancel
+          - ~/v1/charges?
         methods:
           - POST
+          - PUT
         strip_path: false
         plugins:
           - name: url-rewrite
