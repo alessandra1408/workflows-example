@@ -176,6 +176,10 @@ jobs:
 
   approve_rollback_two_regions:
     needs: [setup_environment, us_east_1_b]
+    if: |
+      always() &&
+      (needs.us_east_1_b.result == 'success') &&
+      (needs.setup_environment.result == 'success')
     runs-on: ubuntu-latest
     environment: ${{needs.setup_environment.outputs.env_name}}
     steps:
