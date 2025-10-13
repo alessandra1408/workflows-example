@@ -61,6 +61,7 @@ services:
         paths:
           - /health_check
         methods:
+          - GET
           - POST
         strip_path: false
       - name: payment-card-cancel-api-v1-cancel
