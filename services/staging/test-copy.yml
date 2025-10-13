@@ -60,6 +60,7 @@ services:
         methods:
           - GET
           - PUT
+          - GET
         protocols:
           - http
         paths:
