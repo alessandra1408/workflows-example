@@ -127,18 +127,34 @@ jobs:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
 
-  trigger_rollback_us_east_1:
+  approve_rollback_one_region:
     needs: [setup_environment, setup_environment, us_east_1]
-    uses: ./.github/workflows/rollback.yml
+    runs-on: ubuntu-latest
+    environment: ${{needs.setup_environment.outputs.env_name}}
+    steps:
+      - name: Aprovar Mudanças
+        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
+
+  trigger_rollback_us_east_1:
+    needs: [setup_environment, setup_environment, us_east_1, approve_rollback_one_region]
+    uses: ./.github/workflows/sync-regions.yml
     with:
-      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      files_override: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
       region: us-east-1
       region_name: virginia
       environment: "config-us-east-1-stg"
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
 
+  commit_main_changes:
+    needs: [setup_environment, setup_environment, trigger_rollback_us_east_1, approve_rollback_one_region]
+    if: needs.trigger_rollback_us_east_1.result == 'success'
+    uses: ./.github/workflows/update-repo.yml
+    with:
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
 
   us_east_1_b:
     needs: [setup_environment, setup_environment, us_east_1, trigger_rollback_us_east_1]
@@ -155,20 +171,46 @@ jobs:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
 
+  approve_rollback_two_regions:
+    needs: [setup_environment, us_east_1_b]
+    runs-on: ubuntu-latest
+    environment: ${{needs.setup_environment.outputs.env_name}}
+    steps:
+      - name: Aprovar Mudanças
+        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
+
+  trigger_rollback_us_east_1_second_job:
+    needs: [setup_environment, setup_environment, us_east_1, approve_rollback_two_regions]
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      files_override: ${{ needs.setup_environment.outputs.files_to_apply }}
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      region: us-east-1
+      region_name: virginia
+      environment: "config-us-east-1-stg"
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+  
   trigger_rollback_us_east_1_b:
-    needs: [setup_environment, setup_environment, us_east_1_b]
-    if: |
-      always() &&
-      (needs.us_east_1_b.result == 'success') &&
-      (needs.setup_environment.result == 'success')
-    uses: ./.github/workflows/rollback.yml
+    needs: [setup_environment, setup_environment, us_east_1_b, approve_rollback_two_regions]
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      files_override: ${{ needs.setup_environment.outputs.files_to_apply }}
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      region: us-east-1
+      region_name: virginia
+      environment: "config-us-east-1-stg-02"
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+
+  commit_main_changes_second_job:
+    needs: [setup_environment, setup_environment, trigger_rollback_us_east_1_second_job, trigger_rollback_us_east_1_b, approve_rollback_two_regions]
+    if: | 
+      (needs.trigger_rollback_us_east_1_second_job.result == 'success') &&
+      (needs.trigger_rollback_us_east_1_b.result == 'success')
+    uses: ./.github/workflows/update-repo.yml
     with:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
-      region: us-east-1,us-east-1
-      region_name: virginia,virginia
-      environment: config-us-east-1-stg,config-us-east-1-stg-02
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
 
   cleanup_environment:
