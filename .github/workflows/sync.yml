@@ -159,10 +159,10 @@ jobs:
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
 
   us_east_1_b:
-    needs: [setup_environment, us_east_1, trigger_rollback_us_east_1]
+    needs: [setup_environment, us_east_1, approve_rollback_one_region]
     if: |
       always() &&
-      (needs.trigger_rollback_us_east_1.result == 'failure' || needs.trigger_rollback_us_east_1.result == 'cancelled') &&
+      (needs.approve_rollback_one_region.result == 'failure' || needs.approve_rollback_one_region.result == 'cancelled') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
