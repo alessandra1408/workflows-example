@@ -17,6 +17,7 @@ services:
           - test.com
         methods:
           - POST
+          - GET
         protocols:
           - http
         paths:
