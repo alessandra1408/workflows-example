@@ -192,7 +192,7 @@ jobs:
           path: .
 
   approve_rollback_one_region:
-    needs: [setup_environment, us_east_1]
+    needs: [setup_environment, us_east_1, show_changes]
     runs-on: ubuntu-latest
     environment: ${{needs.setup_environment.outputs.env_name}}
     steps:
@@ -227,7 +227,7 @@ jobs:
     needs: [setup_environment, us_east_1, approve_rollback_one_region]
     if: |
       always() &&
-      (needs.approve_rollback_one_region.result == 'failure' || needs.approve_rollback_one_region.result == 'cancelled') &&
+      (needs.approve_rollback_one_region.result == 'failure') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
@@ -245,6 +245,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       commit_has_changes: ${{ steps.revert.outputs.commit_has_changes }}
+    if: |
+      always() &&
+      (needs.us_east_1_b.result == 'success') &&
+      (needs.setup_environment.result == 'success')
     steps:
       - name: Checkout da branch principal
         uses: actions/checkout@v4
@@ -304,7 +308,7 @@ jobs:
           path: .
 
   approve_rollback_two_regions:
-    needs: [setup_environment, us_east_1_b]
+    needs: [setup_environment, us_east_1_b, show_changes_two_regions]
     if: |
       always() &&
       (needs.us_east_1_b.result == 'success') &&
