@@ -48,7 +48,7 @@ jobs:
           
           readarray -t files_to_revert < <(echo '${{ inputs.files_to_apply }}' | jq -r '.[]')
           
-           for file in "${files_to_revert[@]}"; do
+          for file in "${files_to_revert[@]}"; do
             # Verifica se o arquivo existia no commit antigo
             if git cat-file -e "${{ inputs.stable_commit_sha }}:$file" &>/dev/null; then
               # Se existia, reverte a modificação
@@ -60,10 +60,8 @@ jobs:
               git rm -- "$file"
             fi
           done
-            
-            git checkout ${{ inputs.stable_commit_sha }} -- "${files_to_revert[@]}"
-            echo "COMMIT_HAS_CHANGES=true" >> $GITHUB_OUTPUT
-          fi
+
+          echo "COMMIT_HAS_CHANGES=true" >> $GITHUB_OUTPUT
 
       - name: Publicar diff no Job Summary
         if: ${{ steps.revert.outputs.COMMIT_HAS_CHANGES }} == 'true'
