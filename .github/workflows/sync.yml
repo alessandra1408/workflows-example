@@ -187,7 +187,12 @@ jobs:
         run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
 
   trigger_rollback_us_east_1_second_job:
-    needs: [setup_environment, us_east_1, approve_rollback_two_regions]
+    needs: [setup_environment, us_east_1_b, approve_rollback_two_regions]
+    if: |
+      always() &&
+      (needs.approve_rollback_two_regions.result == 'success') &&
+      (needs.us_east_1_b.result == 'success') &&
+      (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-1
@@ -200,6 +205,11 @@ jobs:
   
   trigger_rollback_us_east_1_b:
     needs: [setup_environment, us_east_1_b, approve_rollback_two_regions]
+    if: |
+      always() &&
+      (needs.approve_rollback_two_regions.result == 'success') &&
+      (needs.us_east_1_b.result == 'success') &&
+      (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
     with:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
@@ -213,6 +223,8 @@ jobs:
   commit_main_changes_second_job:
     needs: [setup_environment, trigger_rollback_us_east_1_second_job, trigger_rollback_us_east_1_b, approve_rollback_two_regions]
     if: | 
+      always() &&
+      (needs.approve_rollback_two_regions.result == 'success') &&
       (needs.trigger_rollback_us_east_1_second_job.result == 'success') &&
       (needs.trigger_rollback_us_east_1_b.result == 'success')
     uses: ./.github/workflows/update-repo.yml
