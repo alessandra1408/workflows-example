@@ -134,6 +134,13 @@ jobs:
     outputs:
       commit_has_changes: ${{ steps.revert.outputs.commit_has_changes }}
     steps:
+      - name: Checkout da branch principal
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: 'main'
+          fetch-depth: 0
+
       - name: Reverter arquivos para gerar o diff
         id: revert
         run: |
@@ -239,6 +246,13 @@ jobs:
     outputs:
       commit_has_changes: ${{ steps.revert.outputs.commit_has_changes }}
     steps:
+      - name: Checkout da branch principal
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: 'main'
+          fetch-depth: 0
+
       - name: Reverter arquivos para gerar o diff
         id: revert
         run: |
