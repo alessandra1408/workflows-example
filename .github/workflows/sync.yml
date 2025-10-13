@@ -161,7 +161,7 @@ jobs:
     needs: [setup_environment, us_east_1, trigger_rollback_us_east_1]
     if: |
       always() &&
-      (needs.trigger_rollback_us_east_1.result == 'failure') &&
+      (needs.trigger_rollback_us_east_1.result == 'failure' || needs.trigger_rollback_us_east_1.result == 'cancelled') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
