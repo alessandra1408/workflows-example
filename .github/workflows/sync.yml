@@ -221,7 +221,6 @@ jobs:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
-      commit_has_changes: ${{ needs.show_changes.outputs.commit_has_changes }}
 
   us_east_1_b:
     needs: [setup_environment, us_east_1, approve_rollback_one_region]
@@ -366,7 +365,6 @@ jobs:
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
-      commit_has_changes: ${{ needs.show_changes_two_regions.outputs.commit_has_changes }}
 
   cleanup_environment:
     runs-on: ubuntu-latest
