@@ -203,7 +203,7 @@ jobs:
         if: ${{ steps.revert.outputs.commit_has_changes }} == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: reverted-files
+          name: reverted-files-show
           path: .
 
   approve_rollback_one_region:
