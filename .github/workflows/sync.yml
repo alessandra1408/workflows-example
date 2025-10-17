@@ -252,6 +252,17 @@ jobs:
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
 
+  wait_time:
+    needs: [us_east_1, approve_rollback_one_region]
+    if: |
+      always() &&
+      (needs.approve_rollback_one_region.result == 'failure') &&
+      (needs.us_east_1.result == 'success')
+    runs-on: small-runner
+    steps:
+      - name: Conditional Sleep
+        run: sleep 10s
+
   us_east_1_b:
     needs: [setup_environment, us_east_1, approve_rollback_one_region]
     if: |

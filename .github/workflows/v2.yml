@@ -1,0 +1,419 @@
+name: V2
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  deployments: write
+
+on:
+  push:
+    paths:
+      - "ca-certs/production/*.yml"
+      - "consumers/production/*.yml"
+      - "plugins/production/*.yml"
+      - "services/production/test.yml"
+    branches:
+      - "main"
+
+jobs:
+  setup_environment:
+    runs-on: small-runner
+    outputs:
+      pr_number: ${{ steps.determine_env.outputs.out_pr_number }}
+      stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}
+      env_name: ${{ steps.determine_env.outputs.env_name }}
+      files_to_apply: ${{ steps.get_files.outputs.files }}
+    steps:
+      - name: Checkout da branch principal
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: 'main'
+          fetch-depth: 0
+
+      - name: 'Get changed files'
+        id: get_files
+        run: |
+          set -ex
+          content=$(git diff --name-only HEAD~1 HEAD | grep -E 'ca-certs/production|...' | jq -R -s -c 'split("\n")[:-1]')
+          echo "files=${content}" >> $GITHUB_OUTPUT
+
+      - name: '1. Determine Environment and Reviewers based on Label'
+        id: determine_env
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -ex
+        
+          echo "Execução por push: buscando PR associado ao commit"
+          PR_DATA=$(gh pr list --search "${{ github.sha }}" --state merged --json number,author,labels | jq '.[0]')
+        
+          PULL_REQUEST_NUMBER=$(echo "$PR_DATA" | jq '.number')
+          PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.author.login')
+          
+          if [ -z "$PULL_REQUEST_NUMBER" ] || [ "$PULL_REQUEST_NUMBER" == "null" ]; then
+            echo "::error::Nenhum PR encontrado."
+            exit 1
+          fi
+
+          echo "out_pr_number=${PULL_REQUEST_NUMBER}" >> $GITHUB_OUTPUT
+
+          TEAM_SLUG=$(echo "$PR_DATA" | jq -r '.labels[] | .name | select(startswith("team:")) | ltrimstr("team:")')
+
+          INITIAL_REVIEWERS_JSON="[]"
+          if [[ -n "$TEAM_SLUG" ]]; then
+            echo "Label 'team:' encontrado. Buscando ID do time '${TEAM_SLUG}'..."
+            
+            TEAM_ID=$(gh api "orgs/${{ github.repository_owner }}/teams/${TEAM_SLUG}" --jq '.id' || echo "")
+            
+            if [[ -z "$TEAM_ID" ]]; then
+              echo "::error::O time '${TEAM_SLUG}' não foi encontrado na organização '${{ github.repository_owner }}'."
+              exit 1
+            else
+              INITIAL_REVIEWERS_JSON=$(jq -n --argjson id "$TEAM_ID" '[{type: "Team", id: $id}]')
+              echo "Time encontrado. ID: ${TEAM_ID}."
+            fi
+          fi
+
+          ENV_NAME="apply-pr-${PULL_REQUEST_NUMBER}"
+
+          JQ_QUERY='.protection_rules[] | select(.type == "required_reviewers") | .reviewers | map({type: .type, id: .reviewer.id})'
+          
+          TECH_APPROVE_REVIEWERS_JSON=$(gh api "repos/${{ github.repository }}/environments/tech-approve" -q "$JQ_QUERY" || echo "")
+          
+          COMBINED_REVIEWERS_JSON=$(echo "${TECH_APPROVE_REVIEWERS_JSON:-[]}" | jq -c --slurpfile initial <(echo "$INITIAL_REVIEWERS_JSON") '. + $initial[0] | unique_by(.id)')
+          
+          PR_AUTHOR_ID=$(gh api "users/${PR_AUTHOR}" --jq '.id')
+          COMBINED_REVIEWERS_JSON=$(echo "$COMBINED_REVIEWERS_JSON" | jq --argjson author_id "$PR_AUTHOR_ID" 'map(select(.id != $author_id))')
+
+          echo "Criando/atualizando o ambiente dinâmico '${ENV_NAME}'..."
+          
+          JSON_BODY=$(jq -n \
+            --argjson reviewers "$COMBINED_REVIEWERS_JSON" \
+            '{
+              "reviewers": $reviewers,
+              "wait_timer": 0,
+              "prevent_self_review": false,
+              "deployment_branch_policy": null
+            }')
+              
+          echo "Payload final a ser enviado:"
+          echo "$JSON_BODY" | jq .
+
+          echo "$JSON_BODY" | gh api \
+            --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" \
+            --input -
+          
+          echo "Ambiente dinâmico '${ENV_NAME}' criado/atualizado com sucesso."
+          echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
+
+      - name: '2. Get Stable Commit SHA'
+        id: get_stable_sha
+        run: |
+          set -ex
+          STABLE_SHA=$(git rev-parse HEAD~1)
+          echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
+      
+      - name: 'DEBUG: Final Outputs of setup_environment'
+        run: |
+          echo "Resumo das saídas geradas:"
+          echo "pr_number: ${{ steps.determine_env.outputs.out_pr_number }}"
+          echo "stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}"
+          echo "env_name: ${{ steps.determine_env.outputs.env_name }}"
+          echo "files_to_apply: ${{ steps.get_files.outputs.files }}"
+
+  us_east_1_b:
+    needs: [setup_environment]
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-1-b
+      region_name: virginia
+      environment: "config-us-east-1-stg"
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+
+  show_changes:
+    needs: [setup_environment, us_east_1_b]
+    runs-on: small-runner
+    outputs:
+      commit_has_changes: ${{ steps.revert.outputs.commit_has_changes }}
+    steps:
+      - name: Checkout da branch principal
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: 'main'
+          fetch-depth: 0
+
+      - name: Reverter arquivos para gerar o diff
+        id: revert
+        run: |
+          echo "Revertendo arquivos para gerar o diff..."
+
+          readarray -t files_to_revert < <(echo '${{ needs.setup_environment.outputs.files_to_apply }}' | jq -r '.[]')
+
+          for file in "${files_to_revert[@]}"; do
+            if git cat-file -e "${{ needs.setup_environment.outputs.stable_commit_sha }}:$file" &>/dev/null; then
+              echo "Revertendo modificação em: $file"
+              git checkout "${{ needs.setup_environment.outputs.stable_commit_sha }}" -- "$file"
+            else
+              echo "Removendo arquivo novo: $file"
+              git rm -- "$file"
+            fi
+          done
+
+          echo "commit_has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Publicar diff no Job Summary
+        if: ${{ steps.revert.outputs.commit_has_changes }} == 'true'
+        run: |
+          GIT_DIFF=$(git diff --color=never HEAD)
+          if [ ${#GIT_DIFF} -gt 60000 ]; then
+            GIT_DIFF="$(echo "$GIT_DIFF" | head -c 60000)\n\n... (diff truncado por ser muito longo)"
+          fi
+          
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          ## ⚠️ Aprovação Necessária para Rollback na \`main\`
+          As seguintes alterações (reversão do PR #${{needs.setup_environment.outputs.pr_number}}) serão commitadas diretamente na branch \`main\` após a sua aprovação.
+          <details><summary>Clique para ver o diff completo</summary>
+          
+          \`\`\`diff
+          $GIT_DIFF
+          \`\`\`
+          </details>
+          
+          **Por favor, revise cuidadosamente e aprove o passo seguinte para continuar.**
+          EOF
+
+      - name: Salvar alterações como artefato
+        if: ${{ steps.revert.outputs.commit_has_changes }} == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reverted-files
+          path: .
+
+  approve_rollback_one_region:
+    needs: [setup_environment, us_east_1_b, show_changes]
+    runs-on: small-runner
+    environment: ${{needs.setup_environment.outputs.env_name}}
+    steps:
+      - name: Aprovar Mudanças
+        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
+
+  trigger_rollback_us_east_1_b:
+    needs: [setup_environment, us_east_1_b, approve_rollback_one_region]
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-1-b
+      region_name: virginia
+      environment: "config-us-east-1-stg"
+      is_rollback: true
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+
+  commit_main_changes:
+    needs: [setup_environment, approve_rollback_one_region, trigger_rollback_us_east_1_b, show_changes]
+    if: needs.trigger_rollback_us_east_1_b.result == 'success'
+    uses: ./.github/workflows/update-repo.yml
+    with:
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+    secrets: inherit
+
+  wait_time:
+    needs: [us_east_1_b]
+    runs-on: small-runner
+    steps:
+      - name: Conditional Sleep
+        run: sleep 3s
+
+  us_east_1:
+    needs: [setup_environment, wait_time]
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-1
+      region_name: virginia
+      environment: "config-us-east-1-stg"
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+
+  approve_rollback_two_regions:
+    needs: [setup_environment, us_east_1, show_changes]
+    if: |
+      always() &&
+      (needs.us_east_1.result == 'success') &&
+      (needs.setup_environment.result == 'success')
+    runs-on: small-runner
+    environment: ${{needs.setup_environment.outputs.env_name}}
+    steps:
+      - name: Aprovar Mudanças
+        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
+
+  trigger_rollback_us_east_1_b_second_job:
+    needs: [setup_environment, us_east_1, approve_rollback_two_regions]
+    if: |
+      always() &&
+      (needs.approve_rollback_two_regions.result == 'success') &&
+      (needs.us_east_1.result == 'success') &&
+      (needs.setup_environment.result == 'success')
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-1-b
+      region_name: virginia
+      environment: "config-us-east-1-stg"
+      is_rollback: true
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+
+  trigger_rollback_us_east_1:
+    needs: [setup_environment, us_east_1, approve_rollback_two_regions]
+    if: |
+      always() &&
+      (needs.approve_rollback_two_regions.result == 'success') &&
+      (needs.us_east_1.result == 'success') &&
+      (needs.setup_environment.result == 'success')
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-1
+      region_name: virginia
+      environment: "config-us-east-1-stg"
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+
+  commit_main_changes_second_job:
+    needs: [setup_environment, trigger_rollback_us_east_1, trigger_rollback_us_east_1_b, approve_rollback_two_regions, show_changes]
+    if: | 
+      always() &&
+      (needs.approve_rollback_two_regions.result == 'success') &&
+      (needs.trigger_rollback_us_east_1.result == 'success') &&
+      (needs.trigger_rollback_us_east_1_b.result == 'success')
+    uses: ./.github/workflows/update-repo.yml
+    with:
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+    secrets: inherit
+
+  wait_time_2:
+    needs: [us_east_1]
+    runs-on: small-runner
+    steps:
+      - name: Conditional Sleep
+        run: sleep 3s
+
+  us_east_2:
+    needs: [setup_environment, wait_time_2]
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-2
+      region_name: ohio
+      environment: "config-us-east-1-stg"
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+    
+  approve_rollback_three_regions:
+    needs: [setup_environment, us_east_2, show_changes]
+    if: |
+      always() &&
+      (needs.us_east_2.result == 'success') &&
+      (needs.setup_environment.result == 'success')
+    runs-on: small-runner
+    environment: ${{needs.setup_environment.outputs.env_name}}
+    steps:
+      - name: Aprovar Mudanças
+        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
+
+  trigger_rollback_us_east_1_b_third_job:
+    needs: [setup_environment, us_east_1, approve_rollback_three_regions]
+    if: |
+      always() &&
+      (needs.approve_rollback_three_regions.result == 'success') &&
+      (needs.us_east_1.result == 'success') &&
+      (needs.setup_environment.result == 'success')
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-1-b
+      region_name: virginia
+      environment: "config-us-east-1-stg"
+      is_rollback: true
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+
+  trigger_rollback_us_east_1_second_job:
+    needs: [setup_environment, us_east_2, approve_rollback_three_regions]
+    if: |
+      always() &&
+      (needs.approve_rollback_three_regions.result == 'success') &&
+      (needs.us_east_2.result == 'success') &&
+      (needs.setup_environment.result == 'success')
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-1
+      region_name: virginia
+      environment: "config-us-east-1-stg"
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+
+
+  trigger_rollback_us_east_2:
+    needs: [setup_environment]
+    uses: ./.github/workflows/sync-regions.yml
+    with:
+      region: us-east-2
+      region_name: ohio
+      environment: "config-us-east-1-stg"
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+
+  commit_main_changes_third_job:
+    needs: [setup_environment, trigger_rollback_us_east_2, trigger_rollback_us_east_1_second_job, trigger_rollback_us_east_1_b_third_job, approve_rollback_three_regions, show_changes]
+    if: | 
+      always() &&
+      (needs.approve_rollback_three_regions.result == 'success') &&
+      (needs.trigger_rollback_us_east_1_second_job.result == 'success') &&
+      (needs.trigger_rollback_us_east_2.result == 'success') &&
+      (needs.trigger_rollback_us_east_1_b_third_job.result == 'success')
+    uses: ./.github/workflows/update-repo.yml
+    with:
+      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
+      pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+    secrets: inherit
+
+  cleanup_environment:
+    runs-on: small-runner
+    if: always()
+    needs: [setup_environment, us_east_1_b, trigger_rollback_us_east_1_b]
+    steps:
+      - name: Checkout da branch principal
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: 'main'
+          fetch-depth: 0
+
+      - name: 'Delete Dynamic Environment'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ENV_NAME: ${{ needs.setup_environment.outputs.env_name }}
+        run: |
+          echo "Limpando o ambiente de decisão: ${ENV_NAME}"
+          if [[ "$ENV_NAME" != apply-pr-* ]]; then
+            echo "::notice::Ambiente '${ENV_NAME}' não será deletado pois não começa com 'apply-pr-'."
+            exit 0
+          fi
+          gh api --method DELETE "repos/${{ github.repository }}/environments/${ENV_NAME}"
