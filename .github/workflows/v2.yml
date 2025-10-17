@@ -18,7 +18,7 @@ on:
 
   workflow_dispatch:
     inputs:
-      pull_request_number:
+      pr_number:
         description: 'Número do Pull Request para buscar as alterações'
         required: true
         type: number
@@ -56,78 +56,69 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN}}
         run: |
           set -ex
-        
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "Execução manual: buscando dados do PR #${{ inputs.pull_request_number }}"
-            PULL_REQUEST_NUMBER="${{ inputs.pull_request_number }}"
-            PR_DATA=$(gh pr view "$PULL_REQUEST_NUMBER" --json number,author,labels)
-          else
-            echo "Execução por push: buscando PR associado ao commit"
-            PR_DATA=$(gh pr list --search "${{ github.sha }}" --state merged --json number,author,labels | jq '.[0]')
-          fi
-          
-          PULL_REQUEST_NUMBER=$(echo "$PR_DATA" | jq '.number')
-          PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.author.login')
-          
-          if [ -z "$PULL_REQUEST_NUMBER" ] || [ "$PULL_REQUEST_NUMBER" == "null" ]; then
-            echo "::error::Nenhum PR encontrado."
-            exit 1
-          fi
 
-          echo "out_pr_number=${PULL_REQUEST_NUMBER}" >> $GITHUB_OUTPUT
-          
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            TEAM_SLUG=$(echo "${{ inputs.team_label }}" | sed 's/team://g')
-          else
-            TEAM_SLUG=$(echo "$PR_DATA" | jq -r '.labels[] | .name | select(startswith("team:")) | ltrimstr("team:")')
-          fi
-
-          INITIAL_REVIEWERS_JSON="[]"
-          if [[ -n "$TEAM_SLUG" ]]; then
-            echo "Label 'team:' encontrado. Buscando ID do time '${TEAM_SLUG}'..."
-            
-            TEAM_ID=$(gh api "orgs/${{ github.repository_owner }}/teams/${TEAM_SLUG}" --jq '.id' || echo "")
-            
-            if [[ -z "$TEAM_ID" ]]; then
-              echo "::error::O time '${TEAM_SLUG}' não foi encontrado na organização '${{ github.repository_owner }}'."
-              exit 1
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              echo "Execução manual: buscando dados do PR #${{ inputs.pr_number }}"
+              PR_NUMBER="${{ inputs.pr_number }}"
+              PR_DATA=$(gh pr view "$PR_NUMBER" --json number,author,labels)
+              PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.author.login')
+              # No modo manual, o TEAM_SLUG vem do input do workflow
+              TEAM_SLUG=$(echo "${{ inputs.team_label }}" | sed 's/team://g')
             else
-              INITIAL_REVIEWERS_JSON=$(jq -n --argjson id "$TEAM_ID" '[{type: "Team", id: $id}]')
-              echo "Time encontrado. ID: ${TEAM_ID}."
+              echo "Execução por push: buscando PR associado ao commit"
+              PR_DATA=$(gh pr list --search "${{ github.sha }}" --state merged --json number,author,labels)
+              PR_NUMBER=$(echo "$PR_DATA" | jq '.[0].number')
+              PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.[0].author.login')
+              TEAM_SLUG=$(echo "$PR_DATA" | jq -r '.[0].labels[] | .name | select(startswith("team:")) | ltrimstr("team:")')
             fi
-          fi
+            
+            if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" == "null" ]; then
+              echo "::error::Nenhum PR encontrado."
+              exit 1
+            fi
+            
+            echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+            
+            if [[ -z "$TEAM_SLUG" ]]; then
+              echo "::notice::Nenhum label 'team:' encontrado. O fluxo seguirá pelo ambiente de aprovação padrão 'tech-approve'."
+              echo "env_name=tech-approve" >> $GITHUB_OUTPUT
+              exit 0
+            fi
 
-          ENV_NAME="apply-pr-${PULL_REQUEST_NUMBER}"
+            echo "Label 'team:' encontrado. Validando time '${TEAM_SLUG}'..."
+            
+            TEAM_MEMBERS=$(gh api "orgs/${{ github.repository_owner }}/teams/${TEAM_SLUG}/members" --jq '.[].login')
+            
+            if [[ -z "$TEAM_MEMBERS" ]]; then
+              echo "::error::O time '${TEAM_SLUG}' foi encontrado, mas não possui membros. O workflow não pode continuar."
+              exit 1
+            fi
+                        
+            echo "Time válido e com membros. Construindo lista de revisores para ambiente dinâmico..."
+            INITIAL_REVIEWERS_JSON="[]"
+            for login in $TEAM_MEMBERS; do
+              USER_ID=$(gh api "users/${login}" --jq '.id')
+              REVIEWER_OBJ=$(jq -n --argjson id "$USER_ID" '{type:"User", id:$id}')
+              INITIAL_REVIEWERS_JSON=$(echo "$INITIAL_REVIEWERS_JSON" | jq ". + [$REVIEWER_OBJ]")
+            done
+            
+            ENV_NAME="apply-pr-${PR_NUMBER}"
+            TECH_APPROVE_REVIEWERS_JSON=$(gh api "repos/${{ github.repository }}/environments/tech-approve" -q '.protection_rules[] | select(.type == "required_reviewers") | .reviewers | map({type: .type, id: .reviewer.id})' || echo "[]")
+            COMBINED_REVIEWERS_JSON=$(echo "$TECH_APPROVE_REVIEWERS_JSON" | jq --slurpfile initial <(echo "$INITIAL_REVIEWERS_JSON") '. + $initial[0] | unique_by(.id)')
+            
+            PR_AUTHOR_ID=$(gh api "users/${PR_AUTHOR}" --jq '.id')
+            COMBINED_REVIEWERS_JSON=$(echo "$COMBINED_REVIEWERS_JSON" | jq --argjson author_id "$PR_AUTHOR_ID" 'map(select(.id != $author_id))')
 
-          JQ_QUERY='.protection_rules[] | select(.type == "required_reviewers") | .reviewers | map({type: .type, id: .reviewer.id})'
-          
-          TECH_APPROVE_REVIEWERS_JSON=$(gh api "repos/${{ github.repository }}/environments/tech-approve" -q "$JQ_QUERY" || echo "")
-          
-          COMBINED_REVIEWERS_JSON=$(echo "${TECH_APPROVE_REVIEWERS_JSON:-[]}" | jq -c --slurpfile initial <(echo "$INITIAL_REVIEWERS_JSON") '. + $initial[0] | unique_by(.id)')
-          
-          PR_AUTHOR_ID=$(gh api "users/${PR_AUTHOR}" --jq '.id')
-          COMBINED_REVIEWERS_JSON=$(echo "$COMBINED_REVIEWERS_JSON" | jq --argjson author_id "$PR_AUTHOR_ID" 'map(select(.id != $author_id))')
+            echo "Criando/atualizando o ambiente dinâmico '${ENV_NAME}'..."
+            gh api \
+              --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" \
+              --field "reviewers=@-" << EOF
+            $COMBINED_REVIEWERS_JSON
+            EOF
+            
+            echo "Ambiente dinâmico '${ENV_NAME}' criado/atualizado com sucesso."
+            echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
 
-          echo "Criando/atualizando o ambiente dinâmico '${ENV_NAME}'..."
-          
-          JSON_BODY=$(jq -n \
-            --argjson reviewers "$COMBINED_REVIEWERS_JSON" \
-            '{
-              "reviewers": $reviewers,
-              "wait_timer": 0,
-              "prevent_self_review": false,
-              "deployment_branch_policy": null
-            }')
-              
-          echo "Payload final a ser enviado:"
-          echo "$JSON_BODY" | jq .
-
-          echo "$JSON_BODY" | gh api \
-            --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" \
-            --input -
-          
-          echo "Ambiente dinâmico '${ENV_NAME}' criado/atualizado com sucesso."
-          echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
 
       - name: '2. Get Stable Commit SHA'
         id: get_stable_sha
