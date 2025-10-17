@@ -233,8 +233,13 @@ jobs:
         run: sleep 3s
 
   us_east_1:
-    needs: [setup_environment, wait_time]
+    needs: [setup_environment, wait_time, approve_rollback_one_region]
     uses: ./.github/workflows/sync-regions.yml
+    if: |
+      always() &&
+      (needs.approve_rollback_one_region.result == 'failure') &&
+      (needs.wait_time.result == 'success') &&
+      (needs.setup_environment.result == 'success')
     with:
       region: us-east-1
       region_name: virginia
@@ -311,8 +316,13 @@ jobs:
         run: sleep 3s
 
   us_east_2:
-    needs: [setup_environment, wait_time_2]
+    needs: [setup_environment, wait_time_2, approve_rollback_two_regions]
     uses: ./.github/workflows/sync-regions.yml
+    if: |
+      always() &&
+      (needs.approve_rollback_two_regions.result == 'failure') &&
+      (needs.wait_time_2.result == 'success') &&
+      (needs.setup_environment.result == 'success')
     with:
       region: us-east-2
       region_name: ohio
@@ -368,7 +378,7 @@ jobs:
 
 
   trigger_rollback_us_east_2:
-    needs: [setup_environment]
+    needs: [setup_environment, us_east_2, approve_rollback_three_regions]
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-2
