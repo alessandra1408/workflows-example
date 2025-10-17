@@ -325,8 +325,12 @@ jobs:
     secrets: inherit
 
   wait_time_2:
-    needs: [us_east_1]
+    needs: [us_east_1, approve_rollback_two_regions]
     runs-on: ubuntu-latest
+    if : |
+      always() &&
+      (needs.approve_rollback_two_regions.result == 'failure') &&
+      (needs.us_east_1.result == 'success')
     steps:
       - name: Conditional Sleep
         run: sleep 3s
