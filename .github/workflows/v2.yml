@@ -9,10 +9,10 @@ permissions:
 on:
   push:
     paths:
-      - "ca-certs/production/*.yml"
-      - "consumers/production/*.yml"
-      - "plugins/production/*.yml"
-      - "services/production/test.yml"
+      - "ca-certs/staging/*.yml"
+      - "consumers/staging/*.yml"
+      - "plugins/staging/*.yml"
+      - "services/staging/*.yml"
     branches:
       - "main"
 
@@ -36,7 +36,7 @@ jobs:
         id: get_files
         run: |
           set -ex
-          content=$(git diff --name-only HEAD~1 HEAD | grep -E 'ca-certs/production|...' | jq -R -s -c 'split("\n")[:-1]')
+          content=$(git diff --name-only HEAD~1 HEAD | grep -E 'ca-certs/staging|...' | jq -R -s -c 'split("\n")[:-1]')
           echo "files=${content}" >> $GITHUB_OUTPUT
 
       - name: '1. Determine Environment and Reviewers based on Label'
