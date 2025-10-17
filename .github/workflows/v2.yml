@@ -18,7 +18,7 @@ on:
 
 jobs:
   setup_environment:
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     outputs:
       pr_number: ${{ steps.determine_env.outputs.out_pr_number }}
       stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}
@@ -136,7 +136,7 @@ jobs:
 
   show_changes:
     needs: [setup_environment, us_east_1_b]
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     outputs:
       commit_has_changes: ${{ steps.revert.outputs.commit_has_changes }}
     steps:
@@ -196,7 +196,7 @@ jobs:
 
   approve_rollback_one_region:
     needs: [setup_environment, us_east_1_b, show_changes]
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     environment: ${{needs.setup_environment.outputs.env_name}}
     steps:
       - name: Aprovar Mudanças
@@ -227,7 +227,7 @@ jobs:
 
   wait_time:
     needs: [us_east_1_b]
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     steps:
       - name: Conditional Sleep
         run: sleep 3s
@@ -249,7 +249,7 @@ jobs:
       always() &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     environment: ${{needs.setup_environment.outputs.env_name}}
     steps:
       - name: Aprovar Mudanças
@@ -305,7 +305,7 @@ jobs:
 
   wait_time_2:
     needs: [us_east_1]
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     steps:
       - name: Conditional Sleep
         run: sleep 3s
@@ -327,7 +327,7 @@ jobs:
       always() &&
       (needs.us_east_2.result == 'success') &&
       (needs.setup_environment.result == 'success')
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     environment: ${{needs.setup_environment.outputs.env_name}}
     steps:
       - name: Aprovar Mudanças
@@ -395,7 +395,7 @@ jobs:
     secrets: inherit
 
   cleanup_environment:
-    runs-on: small-runner
+    runs-on: ubuntu-latest
     if: always()
     needs: [setup_environment, us_east_1_b, trigger_rollback_us_east_1_b]
     steps:
