@@ -28,7 +28,7 @@ jobs:
       - name: Checkout da branch principal
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_TOKEN}}
           ref: 'main'
           fetch-depth: 0
 
@@ -42,7 +42,7 @@ jobs:
       - name: '1. Determine Environment and Reviewers based on Label'
         id: determine_env
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN}}
         run: |
           set -ex
         
@@ -143,7 +143,7 @@ jobs:
       - name: Checkout da branch principal
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_TOKEN}}
           ref: 'main'
           fetch-depth: 0
 
@@ -402,13 +402,13 @@ jobs:
       - name: Checkout da branch principal
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_TOKEN}}
           ref: 'main'
           fetch-depth: 0
 
       - name: 'Delete Dynamic Environment'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN}}
           ENV_NAME: ${{ needs.setup_environment.outputs.env_name }}
         run: |
           echo "Limpando o ambiente de decisão: ${ENV_NAME}"
