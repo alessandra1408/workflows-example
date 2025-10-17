@@ -58,7 +58,6 @@ services:
           - payments.stone.com.br
           - payments-stg.stone.com.br
         methods:
-          - GET
           - PUT
           - GET
         protocols:
