@@ -88,7 +88,7 @@ jobs:
         if: ${{ steps.revert.outputs.COMMIT_HAS_CHANGES }} == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: reverted-files-commit
+          name: reverted-files
           path: .
 
   wait-for-approval:
@@ -119,7 +119,7 @@ jobs:
       - name: Baixar artefato com arquivos revertidos
         uses: actions/download-artifact@v4
         with:
-          name: reverted-files-download
+          name: reverted-files
           path: .
 
       - name: Configurar Git
