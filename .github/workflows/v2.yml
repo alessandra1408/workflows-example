@@ -305,6 +305,7 @@ jobs:
       region: us-east-1
       region_name: virginia
       environment: "config-us-east-1-stg"
+      is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
@@ -392,6 +393,7 @@ jobs:
       region: us-east-1
       region_name: virginia
       environment: "config-us-east-1-stg"
+      is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
@@ -400,10 +402,16 @@ jobs:
   trigger_rollback_us_east_2:
     needs: [setup_environment, us_east_2, approve_rollback_three_regions]
     uses: ./.github/workflows/sync-regions.yml
+    if: |
+      always() &&
+      (needs.approve_rollback_three_regions.result == 'success') &&
+      (needs.us_east_2.result == 'success') &&
+      (needs.setup_environment.result == 'success')
     with:
       region: us-east-2
       region_name: ohio
       environment: "config-us-east-1-stg"
+      is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}

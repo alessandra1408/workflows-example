@@ -49,7 +49,7 @@ jobs:
           Este job foi iniciado por: $GITHUB_ACTOR"
 
   approve:
-    runs-on: ubuntu-latest
+    runs-on: small-runner
     if: ${{ inputs.is_rollback == false }}
     needs: [start_job]
     environment: ${{ inputs.dynamic_environment }}
@@ -58,8 +58,10 @@ jobs:
         run: echo "Mudanças aprovadas para o ambiente '${{ inputs.dynamic_environment }}'"
 
   apply:
-    runs-on: ubuntu-latest
+    runs-on: small-runner-on-demand
     needs: [approve]
+    if: |
+      always() && (needs.approve.result == 'success' && inputs.is_rollback == false) || (inputs.is_rollback == true)
     environment: ${{ inputs.environment }}
     strategy:
       fail-fast: false
