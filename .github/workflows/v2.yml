@@ -48,7 +48,7 @@ jobs:
         
           echo "Execução por push: buscando PR associado ao commit"
           PR_DATA=$(gh pr list --search "${{ github.sha }}" --state merged --json number,author,labels | jq '.[0]')
-        
+          
           PULL_REQUEST_NUMBER=$(echo "$PR_DATA" | jq '.number')
           PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.author.login')
           
@@ -107,6 +107,7 @@ jobs:
           
           echo "Ambiente dinâmico '${ENV_NAME}' criado/atualizado com sucesso."
           echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
+
 
       - name: '2. Get Stable Commit SHA'
         id: get_stable_sha
@@ -226,8 +227,12 @@ jobs:
     secrets: inherit
 
   wait_time:
-    needs: [us_east_1_b]
+    needs: [us_east_1_b, approve_rollback_one_region]
     runs-on: ubuntu-latest
+    if : |
+      always() &&
+      (needs.approve_rollback_one_region.result == 'failure') &&
+      (needs.us_east_1_b.result == 'success')
     steps:
       - name: Conditional Sleep
         run: sleep 3s
