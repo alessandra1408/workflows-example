@@ -224,7 +224,6 @@ jobs:
     needs: [setup_environment, us_east_1_b, show_changes]
     runs-on: ubuntu-latest
     environment: ${{needs.setup_environment.outputs.rollback_env}}
-    continue-on-error: true
     steps:
       - name: Aprovar Mudanças
         run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.rollback_env }}'"
@@ -287,7 +286,6 @@ jobs:
       (needs.setup_environment.result == 'success')
     runs-on: ubuntu-latest
     environment: ${{needs.setup_environment.outputs.rollback_env}}
-    continue-on-error: true
     steps:
       - name: Aprovar Mudanças
         run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.rollback_env }}'"
@@ -375,7 +373,6 @@ jobs:
       (needs.us_east_2.result == 'success') &&
       (needs.setup_environment.result == 'success')
     runs-on: ubuntu-latest
-    continue-on-error: true
     environment: ${{needs.setup_environment.outputs.rollback_env}}
     steps:
       - name: Aprovar Mudanças
