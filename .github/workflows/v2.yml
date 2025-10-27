@@ -33,7 +33,8 @@ jobs:
     outputs:
       pr_number: ${{ steps.determine_env.outputs.out_pr_number }}
       stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}
-      env_name: ${{ steps.determine_env.outputs.env_name }}
+      apply_env: ${{ steps.determine_env.outputs.apply_env }}
+      rollback_env: ${{ steps.determine_env.outputs.rollback_env }}
       files_to_apply: ${{ steps.get_files.outputs.files }}
     steps:
       - name: Checkout da branch principal
@@ -81,7 +82,8 @@ jobs:
             
             if [[ -z "$TEAM_SLUG" ]]; then
               echo "::notice::Nenhum label 'team:' encontrado. O fluxo seguirá pelo ambiente de aprovação padrão 'tech-approve'."
-              echo "env_name=tech-approve" >> $GITHUB_OUTPUT
+              echo "apply_env=tech-approve" >> $GITHUB_OUTPUT
+              echo "rollback_env=tech-approve" >> $GITHUB_OUTPUT
               exit 0
             fi
 
@@ -102,23 +104,34 @@ jobs:
               INITIAL_REVIEWERS_JSON=$(echo "$INITIAL_REVIEWERS_JSON" | jq ". + [$REVIEWER_OBJ]")
             done
             
-            ENV_NAME="apply-pr-${PR_NUMBER}"
+            apply_env="apply-pr-${PR_NUMBER}"
             TECH_APPROVE_REVIEWERS_JSON=$(gh api "repos/${{ github.repository }}/environments/tech-approve" -q '.protection_rules[] | select(.type == "required_reviewers") | .reviewers | map({type: .type, id: .reviewer.id})' || echo "[]")
             COMBINED_REVIEWERS_JSON=$(echo "$TECH_APPROVE_REVIEWERS_JSON" | jq --slurpfile initial <(echo "$INITIAL_REVIEWERS_JSON") '. + $initial[0] | unique_by(.id)')
             
             PR_AUTHOR_ID=$(gh api "users/${PR_AUTHOR}" --jq '.id')
             COMBINED_REVIEWERS_JSON=$(echo "$COMBINED_REVIEWERS_JSON" | jq --argjson author_id "$PR_AUTHOR_ID" 'map(select(.id != $author_id))')
 
-            echo "Criando/atualizando o ambiente dinâmico '${ENV_NAME}'..."
+            echo "Criando/atualizando o ambiente dinâmico '${apply_env}'..."
             gh api \
-              --method PUT "repos/${{ github.repository }}/environments/${ENV_NAME}" \
+              --method PUT "repos/${{ github.repository }}/environments/${apply_env}" \
               --field "reviewers=@-" << EOF
             $COMBINED_REVIEWERS_JSON
             EOF
-            
-            echo "Ambiente dinâmico '${ENV_NAME}' criado/atualizado com sucesso."
-            echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
 
+            echo "Ambiente dinâmico '${apply_env}' criado/atualizado com sucesso."
+            echo "apply_env=${apply_env}" >> $GITHUB_OUTPUT
+            
+            rollback_env="rollback-pr-${PR_NUMBER}"
+
+            echo "Criando/atualizando o ambiente dinâmico '${rollback_env}'..."
+            gh api \
+              --method PUT "repos/${{ github.repository }}/environments/${rollback_env}" \
+              --field "reviewers=@-" << EOF
+            $COMBINED_REVIEWERS_JSON
+            EOF
+
+            echo "Ambiente dinâmico '${rollback_env}' criado/atualizado com sucesso."
+            echo "rollback_env=${rollback_env}" >> $GITHUB_OUTPUT
 
       - name: '2. Get Stable Commit SHA'
         id: get_stable_sha
@@ -132,7 +145,8 @@ jobs:
           echo "Resumo das saídas geradas:"
           echo "pr_number: ${{ steps.determine_env.outputs.out_pr_number }}"
           echo "stable_commit_sha: ${{ steps.get_stable_sha.outputs.sha }}"
-          echo "env_name: ${{ steps.determine_env.outputs.env_name }}"
+          echo "apply_env: ${{ steps.determine_env.outputs.apply_env }}"
+          echo "rollback_env: ${{ steps.determine_env.outputs.rollback_env }}"
           echo "files_to_apply: ${{ steps.get_files.outputs.files }}"
 
   us_east_1_b:
@@ -143,7 +157,7 @@ jobs:
       region_name: virginia
       environment: "config-us-east-1-stg"
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.apply_env }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
 
   show_changes:
@@ -209,10 +223,11 @@ jobs:
   approve_rollback_one_region:
     needs: [setup_environment, us_east_1_b, show_changes]
     runs-on: ubuntu-latest
-    environment: ${{needs.setup_environment.outputs.env_name}}
+    environment: ${{needs.setup_environment.outputs.rollback_env}}
+    continue-on-error: true
     steps:
       - name: Aprovar Mudanças
-        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
+        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.rollback_env }}'"
 
   trigger_rollback_us_east_1_b:
     needs: [setup_environment, us_east_1_b, approve_rollback_one_region]
@@ -224,7 +239,7 @@ jobs:
       is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.rollback_env }}
 
   commit_main_changes:
     needs: [setup_environment, approve_rollback_one_region, trigger_rollback_us_east_1_b, show_changes]
@@ -234,7 +249,7 @@ jobs:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.rollback_env }}
     secrets: inherit
 
   wait_time:
@@ -261,7 +276,7 @@ jobs:
       region_name: virginia
       environment: "config-us-east-1-stg"
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.apply_env }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
 
   approve_rollback_two_regions:
@@ -271,10 +286,11 @@ jobs:
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     runs-on: ubuntu-latest
-    environment: ${{needs.setup_environment.outputs.env_name}}
+    environment: ${{needs.setup_environment.outputs.rollback_env}}
+    continue-on-error: true
     steps:
       - name: Aprovar Mudanças
-        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
+        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.rollback_env }}'"
 
   trigger_rollback_us_east_1_b_second_job:
     needs: [setup_environment, us_east_1, approve_rollback_two_regions]
@@ -291,7 +307,7 @@ jobs:
       is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.rollback_env }}
 
   trigger_rollback_us_east_1:
     needs: [setup_environment, us_east_1, approve_rollback_two_regions]
@@ -307,8 +323,8 @@ jobs:
       environment: "config-us-east-1-stg"
       is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
-      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.apply_env }}
+      files_to_apply: ${{ needs.setup_environment.outputs.rollback_env }}
 
   commit_main_changes_second_job:
     needs: [setup_environment, trigger_rollback_us_east_1, trigger_rollback_us_east_1_b, approve_rollback_two_regions, show_changes]
@@ -322,7 +338,7 @@ jobs:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.rollback_env }}
     secrets: inherit
 
   wait_time_2:
@@ -350,7 +366,7 @@ jobs:
       environment: "config-us-east-1-stg"
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.apply_env }}
     
   approve_rollback_three_regions:
     needs: [setup_environment, us_east_2, show_changes]
@@ -359,10 +375,11 @@ jobs:
       (needs.us_east_2.result == 'success') &&
       (needs.setup_environment.result == 'success')
     runs-on: ubuntu-latest
-    environment: ${{needs.setup_environment.outputs.env_name}}
+    continue-on-error: true
+    environment: ${{needs.setup_environment.outputs.rollback_env}}
     steps:
       - name: Aprovar Mudanças
-        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.env_name }}'"
+        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.rollback_env }}'"
 
   trigger_rollback_us_east_1_b_third_job:
     needs: [setup_environment, us_east_1, approve_rollback_three_regions]
@@ -379,7 +396,7 @@ jobs:
       is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.rollback_env }}
 
   trigger_rollback_us_east_1_second_job:
     needs: [setup_environment, us_east_2, approve_rollback_three_regions]
@@ -395,8 +412,8 @@ jobs:
       environment: "config-us-east-1-stg"
       is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
-      files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.apply_env }}
+      files_to_apply: ${{ needs.setup_environment.outputs.rollback_env }}
 
 
   trigger_rollback_us_east_2:
@@ -414,7 +431,7 @@ jobs:
       is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.rollback_env }}
 
   commit_main_changes_third_job:
     needs: [setup_environment, trigger_rollback_us_east_2, trigger_rollback_us_east_1_second_job, trigger_rollback_us_east_1_b_third_job, approve_rollback_three_regions, show_changes]
@@ -429,7 +446,7 @@ jobs:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       pr_number_to_revert: ${{ needs.setup_environment.outputs.pr_number }}
-      dynamic_environment: ${{ needs.setup_environment.outputs.env_name }}
+      dynamic_environment: ${{ needs.setup_environment.outputs.rollback_env }}
     secrets: inherit
 
   cleanup_environment:
@@ -447,11 +464,19 @@ jobs:
       - name: 'Delete Dynamic Environment'
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN}}
-          ENV_NAME: ${{ needs.setup_environment.outputs.env_name }}
+          apply_env: ${{ needs.setup_environment.outputs.apply_env }}
+          rollback_env: ${{ needs.setup_environment.outputs.rollback_env }}
         run: |
-          echo "Limpando o ambiente de decisão: ${ENV_NAME}"
-          if [[ "$ENV_NAME" != apply-pr-* ]]; then
-            echo "::notice::Ambiente '${ENV_NAME}' não será deletado pois não começa com 'apply-pr-'."
-            exit 0
-          fi
-          gh api --method DELETE "repos/${{ github.repository }}/environments/${ENV_NAME}"
+          echo "Limpando os ambientes de decisão: ${apply_env} e ${rollback_env}"
+            if [[ "$apply_env" != apply-pr-* ]]; then
+              echo "::notice::Ambiente '${apply_env}' não será deletado pois não começa com 'apply-pr-'."
+              exit 0
+            fi
+            gh api --method DELETE "repos/${{ github.repository }}/environments/${apply_env}"
+            
+            if [[ "$rollback_env" == rollback-pr-* ]]; then
+              gh api --method DELETE "repos/${{ github.repository }}/environments/${rollback_env}"
+              echo "Ambiente '${rollback_env}' deletado com sucesso."
+            else
+            echo "::notice::Ambiente '${rollback_env}' não será deletado pois não começa com 'rollback-pr-'."
+            fi
