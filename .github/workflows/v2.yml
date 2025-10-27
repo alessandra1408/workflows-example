@@ -226,7 +226,9 @@ jobs:
     environment: ${{needs.setup_environment.outputs.rollback_env}}
     steps:
       - name: Aprovar Mudanças
-        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.rollback_env }}'"
+        run: |
+          echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.rollback_env }}'"
+          exit 0
 
   trigger_rollback_us_east_1_b:
     needs: [setup_environment, us_east_1_b, approve_rollback_one_region]
@@ -288,7 +290,9 @@ jobs:
     environment: ${{needs.setup_environment.outputs.rollback_env}}
     steps:
       - name: Aprovar Mudanças
-        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.rollback_env }}'"
+        run: |
+          echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.rollback_env }}'"
+          exit 0
 
   trigger_rollback_us_east_1_b_second_job:
     needs: [setup_environment, us_east_1, approve_rollback_two_regions]
@@ -376,7 +380,9 @@ jobs:
     environment: ${{needs.setup_environment.outputs.rollback_env}}
     steps:
       - name: Aprovar Mudanças
-        run: echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.rollback_env }}'"
+        run: |
+          echo "Mudanças aprovadas para o ambiente '${{ needs.setup_environment.outputs.rollback_env }}'"
+          exit 0
 
   trigger_rollback_us_east_1_b_third_job:
     needs: [setup_environment, us_east_1, approve_rollback_three_regions]
