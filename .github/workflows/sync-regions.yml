@@ -94,12 +94,8 @@ jobs:
             
             TAG_NAME=$(basename "$FILE_TO_PROCESS" .yml)
             
-            # Cria o arquivo stub
-            cat <<EOF > "$FILE_TO_PROCESS"
-           _format_version: "3.0"
-           _tags:
-             - $TAG_NAME
-           EOF
+            printf "_format_version: \"3.0\"\n_tags:\n  - %s\n" "$TAG_NAME" > "$FILE_TO_PROCESS"
+            
             echo "--- Conteúdo do Stub Gerado ($FILE_TO_PROCESS) ---"
             cat "$FILE_TO_PROCESS"
             echo "-------------------------------------"
