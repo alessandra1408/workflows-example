@@ -177,20 +177,41 @@ jobs:
         id: revert
         run: |
           echo "Revertendo arquivos para gerar o diff..."
-
+          
           readarray -t files_to_revert < <(echo '${{ needs.setup_environment.outputs.files_to_apply }}' | jq -r '.[]')
+          
+          if [ ${#files_to_revert[@]} -eq 0 ]; then
+            echo "Nenhum arquivo especificado para reverter."
+            echo "COMMIT_HAS_CHANGES=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
+          echo "Arquivos a serem revertidos:"
+          printf " - %s\n" "${files_to_revert[@]}"
+          
           for file in "${files_to_revert[@]}"; do
+            
             if git cat-file -e "${{ needs.setup_environment.outputs.stable_commit_sha }}:$file" &>/dev/null; then
-              echo "Revertendo modificação em: $file"
+              
+              echo "Restaurando versão antiga de: $file"
               git checkout "${{ needs.setup_environment.outputs.stable_commit_sha }}" -- "$file"
             else
-              echo "Removendo arquivo novo: $file"
-              git rm -- "$file"
+              
+              echo "Rollback de arquivo novo. Criando 'stub' de deleção para $file"
+              TAG_NAME=$(basename "$file" .yml)
+              
+              printf "_format_version: \"3.0\"\n_tags:\n  - %s\n" "$TAG_NAME" > "$file"
+              
+              git add "$file"
             fi
           done
-
-          echo "commit_has_changes=true" >> $GITHUB_OUTPUT
+          
+          if ! git diff-index --cached --quiet HEAD; then
+             echo "COMMIT_HAS_CHANGES=true" >> $GITHUB_OUTPUT
+          else
+             echo "Nenhuma mudança de conteúdo detectada após a reversão."
+             echo "COMMIT_HAS_CHANGES=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Publicar diff no Job Summary
         if: ${{ steps.revert.outputs.commit_has_changes }} == 'true'
