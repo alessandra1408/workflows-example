@@ -68,7 +68,7 @@ jobs:
               echo "Rollback de arquivo novo. Criando 'stub' de deleção para $file"
               TAG_NAME=$(basename "$file" .yml)
               
-              printf "_format_version: \"3.0\"\n_tags:\n  - %s\n" "$TAG_NAME" > "$file"
+              printf "_format_version: \"3.0\"\n_info:\n  defaults: {}\n  select_tags:\n    - %s\n" "$TAG_NAME" > "$FILE_TO_PROCESS"
               
               git add "$file"
             fi
