@@ -71,7 +71,47 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.stable_commit_sha || github.sha }}
+          ref: ${{ inputs.is_rollback == true && inputs.stable_commit_sha || github.sha }}
+          fetch-depth: 0 
+
+      - name: Verify Checkout Version
+        run: |
+          echo "--- VERIFICAÇÃO DE CHECKOUT ---"
+          echo "inputs.is_rollback: ${{ inputs.is_rollback }}"
+          echo "Commit que foi realmente baixado (HEAD):"
+          git log -n 1 --oneline
+
+      - name: Test File Preparation Logic
+        if: inputs.is_rollback == true
+        run: |
+          FILE_TO_PROCESS="${{ matrix.file }}"
+          echo "--- TESTE DA LÓGICA DE ROLLBACK (Arquivo: $FILE_TO_PROCESS) ---"
+
+          # Verifica se o arquivo NÃO existe no disco
+          if [ ! -f "$FILE_TO_PROCESS" ]; then
+            echo "Arquivo NÃO encontrado (Rollback de Adição)."
+            echo "Criando 'stub' de deleção..."
+            
+            TAG_NAME=$(basename "$FILE_TO_PROCESS" .yml)
+            
+            # Cria o arquivo stub
+            cat <<EOF > "$FILE_TO_PROCESS"
+           _format_version: "3.0"
+           _tags:
+             - $TAG_NAME
+           EOF
+            echo "--- Conteúdo do Stub Gerado ($FILE_TO_PROCESS) ---"
+            cat "$FILE_TO_PROCESS"
+            echo "-------------------------------------"
+            echo "Teste do Caso 1 (Criação de Stub) BEM-SUCEDIDO."
+            
+          else
+            echo "Arquivo $FILE_TO_PROCESS encontrado (Rollback de Modificação/Deleção)."
+            echo "--- Conteúdo do Arquivo ---"
+            cat "$FILE_TO_PROCESS"
+            echo "-------------------------------------"
+            echo "Teste do Caso 2 ou 3 (Arquivo Existente) BEM-SUCEDIDO."
+          fi
 
       - uses: kong/setup-deck@v1
         with:
