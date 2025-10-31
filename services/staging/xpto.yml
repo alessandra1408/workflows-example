@@ -3,24 +3,3 @@ _info:
   defaults: {}
   select_tags:
     - xpto
-services:
-  - name: xpto
-    enabled: true
-    host: xpto
-    port: 443
-    tls_verify: false
-    protocol: https
-    routes:
-      - name: xpto-route
-        hosts:
-          - xpto.com
-        methods:
-          - GET
-          - POST
-        protocols:
-          - http
-        paths:
-          - /auth/xpto
-        strip_path: false
-    tags:
-      - xpto
