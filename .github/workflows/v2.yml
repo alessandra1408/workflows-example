@@ -254,7 +254,7 @@ jobs:
           name: reverted-files-show
           path: .
 
-  approve_rollback_one_region:
+  skip_rollback_one_region:
     needs: [setup_environment, us_east_1_b, show_changes]
     runs-on: ubuntu-latest
     environment: ${{needs.setup_environment.outputs.rollback_env}}
@@ -265,7 +265,7 @@ jobs:
           exit 0
 
   trigger_rollback_us_east_1_b:
-    needs: [setup_environment, us_east_1_b, approve_rollback_one_region]
+    needs: [setup_environment, us_east_1_b, skip_rollback_one_region]
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-1-b
@@ -277,7 +277,7 @@ jobs:
       dynamic_environment: ${{ needs.setup_environment.outputs.rollback_env }}
 
   commit_main_changes:
-    needs: [setup_environment, approve_rollback_one_region, trigger_rollback_us_east_1_b, show_changes]
+    needs: [setup_environment, skip_rollback_one_region, trigger_rollback_us_east_1_b, show_changes]
     if: needs.trigger_rollback_us_east_1_b.result == 'success'
     uses: ./.github/workflows/update-repo.yml
     with:
@@ -288,22 +288,22 @@ jobs:
     secrets: inherit
 
   wait_time:
-    needs: [us_east_1_b, approve_rollback_one_region]
+    needs: [us_east_1_b, skip_rollback_one_region]
     runs-on: ubuntu-latest
     if : |
       always() &&
-      (needs.approve_rollback_one_region.result == 'failure') &&
+      (needs.skip_rollback_one_region.result == 'success') &&
       (needs.us_east_1_b.result == 'success')
     steps:
       - name: Conditional Sleep
         run: sleep 3s
 
   us_east_1:
-    needs: [setup_environment, wait_time, approve_rollback_one_region]
+    needs: [setup_environment, wait_time, skip_rollback_one_region]
     uses: ./.github/workflows/sync-regions.yml
     if: |
       always() &&
-      (needs.approve_rollback_one_region.result == 'failure') &&
+      (needs.skip_rollback_one_region.result == 'success') &&
       (needs.wait_time.result == 'success') &&
       (needs.setup_environment.result == 'success')
     with:
@@ -314,7 +314,7 @@ jobs:
       dynamic_environment: ${{ needs.setup_environment.outputs.apply_env }}
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
 
-  approve_rollback_two_regions:
+  skip_rollback_two_regions:
     needs: [setup_environment, us_east_1, show_changes]
     if: |
       always() &&
@@ -329,10 +329,10 @@ jobs:
           exit 0
 
   trigger_rollback_us_east_1_b_second_job:
-    needs: [setup_environment, us_east_1, approve_rollback_two_regions]
+    needs: [setup_environment, us_east_1, skip_rollback_two_regions]
     if: |
       always() &&
-      (needs.approve_rollback_two_regions.result == 'success') &&
+      (needs.skip_rollback_two_regions.result == 'success') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
@@ -346,10 +346,10 @@ jobs:
       dynamic_environment: ${{ needs.setup_environment.outputs.rollback_env }}
 
   trigger_rollback_us_east_1:
-    needs: [setup_environment, us_east_1, approve_rollback_two_regions]
+    needs: [setup_environment, us_east_1, skip_rollback_two_regions]
     if: |
       always() &&
-      (needs.approve_rollback_two_regions.result == 'success') &&
+      (needs.skip_rollback_two_regions.result == 'success') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
@@ -363,10 +363,10 @@ jobs:
       files_to_apply: ${{ needs.setup_environment.outputs.rollback_env }}
 
   commit_main_changes_second_job:
-    needs: [setup_environment, trigger_rollback_us_east_1, trigger_rollback_us_east_1_b, approve_rollback_two_regions, show_changes]
+    needs: [setup_environment, trigger_rollback_us_east_1, trigger_rollback_us_east_1_b, skip_rollback_two_regions, show_changes]
     if: | 
       always() &&
-      (needs.approve_rollback_two_regions.result == 'success') &&
+      (needs.skip_rollback_two_regions.result == 'success') &&
       (needs.trigger_rollback_us_east_1.result == 'success') &&
       (needs.trigger_rollback_us_east_1_b.result == 'success')
     uses: ./.github/workflows/update-repo.yml
@@ -378,22 +378,22 @@ jobs:
     secrets: inherit
 
   wait_time_2:
-    needs: [us_east_1, approve_rollback_two_regions]
+    needs: [us_east_1, skip_rollback_two_regions]
     runs-on: ubuntu-latest
     if : |
       always() &&
-      (needs.approve_rollback_two_regions.result == 'failure') &&
+      (needs.skip_rollback_two_regions.result == 'success') &&
       (needs.us_east_1.result == 'success')
     steps:
       - name: Conditional Sleep
         run: sleep 3s
 
   us_east_2:
-    needs: [setup_environment, wait_time_2, approve_rollback_two_regions]
+    needs: [setup_environment, wait_time_2, skip_rollback_two_regions]
     uses: ./.github/workflows/sync-regions.yml
     if: |
       always() &&
-      (needs.approve_rollback_two_regions.result == 'failure') &&
+      (needs.skip_rollback_two_regions.result == 'success') &&
       (needs.wait_time_2.result == 'success') &&
       (needs.setup_environment.result == 'success')
     with:
@@ -404,7 +404,7 @@ jobs:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
       dynamic_environment: ${{ needs.setup_environment.outputs.apply_env }}
     
-  approve_rollback_three_regions:
+  skip_rollback_three_regions:
     needs: [setup_environment, us_east_2, show_changes]
     if: |
       always() &&
@@ -419,10 +419,10 @@ jobs:
           exit 0
 
   trigger_rollback_us_east_1_b_third_job:
-    needs: [setup_environment, us_east_1, approve_rollback_three_regions]
+    needs: [setup_environment, us_east_1, skip_rollback_three_regions]
     if: |
       always() &&
-      (needs.approve_rollback_three_regions.result == 'success') &&
+      (needs.skip_rollback_three_regions.result == 'success') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
@@ -436,10 +436,10 @@ jobs:
       dynamic_environment: ${{ needs.setup_environment.outputs.rollback_env }}
 
   trigger_rollback_us_east_1_second_job:
-    needs: [setup_environment, us_east_2, approve_rollback_three_regions]
+    needs: [setup_environment, us_east_2, skip_rollback_three_regions]
     if: |
       always() &&
-      (needs.approve_rollback_three_regions.result == 'success') &&
+      (needs.skip_rollback_three_regions.result == 'success') &&
       (needs.us_east_2.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
@@ -454,11 +454,11 @@ jobs:
 
 
   trigger_rollback_us_east_2:
-    needs: [setup_environment, us_east_2, approve_rollback_three_regions]
+    needs: [setup_environment, us_east_2, skip_rollback_three_regions]
     uses: ./.github/workflows/sync-regions.yml
     if: |
       always() &&
-      (needs.approve_rollback_three_regions.result == 'success') &&
+      (needs.skip_rollback_three_regions.result == 'success') &&
       (needs.us_east_2.result == 'success') &&
       (needs.setup_environment.result == 'success')
     with:
@@ -471,10 +471,10 @@ jobs:
       dynamic_environment: ${{ needs.setup_environment.outputs.rollback_env }}
 
   commit_main_changes_third_job:
-    needs: [setup_environment, trigger_rollback_us_east_2, trigger_rollback_us_east_1_second_job, trigger_rollback_us_east_1_b_third_job, approve_rollback_three_regions, show_changes]
+    needs: [setup_environment, trigger_rollback_us_east_2, trigger_rollback_us_east_1_second_job, trigger_rollback_us_east_1_b_third_job, skip_rollback_three_regions, show_changes]
     if: | 
       always() &&
-      (needs.approve_rollback_three_regions.result == 'success') &&
+      (needs.skip_rollback_three_regions.result == 'success') &&
       (needs.trigger_rollback_us_east_1_second_job.result == 'success') &&
       (needs.trigger_rollback_us_east_2.result == 'success') &&
       (needs.trigger_rollback_us_east_1_b_third_job.result == 'success')
