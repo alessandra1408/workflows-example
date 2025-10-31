@@ -364,19 +364,19 @@ jobs:
     with:
       region: us-east-1
       region_name: virginia
-      environment: "config-us-east-1-stg"
+      environment: "config-us-east-1-stg-02"
       is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       dynamic_environment: ${{ needs.setup_environment.outputs.apply_env }}
       files_to_apply: ${{ needs.setup_environment.outputs.rollback_env }}
 
   commit_main_changes_second_job:
-    needs: [setup_environment, trigger_rollback_us_east_1, trigger_rollback_us_east_1_b, skip_rollback_two_regions, show_changes]
+    needs: [setup_environment, trigger_rollback_us_east_1, trigger_rollback_us_east_1_b_second_job, skip_rollback_two_regions, show_changes]
     if: | 
       always() &&
       (needs.skip_rollback_two_regions.result == 'failure') &&
       (needs.trigger_rollback_us_east_1.result == 'success') &&
-      (needs.trigger_rollback_us_east_1_b.result == 'success')
+      (needs.trigger_rollback_us_east_1_b_second_job.result == 'success')
     uses: ./.github/workflows/update-repo.yml
     with:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
@@ -454,7 +454,7 @@ jobs:
     with:
       region: us-east-1
       region_name: virginia
-      environment: "config-us-east-1-stg"
+      environment: "config-us-east-1-stg-02"
       is_rollback: true
       stable_commit_sha: ${{ needs.setup_environment.outputs.stable_commit_sha }}
       dynamic_environment: ${{ needs.setup_environment.outputs.apply_env }}
