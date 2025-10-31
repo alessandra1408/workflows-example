@@ -283,7 +283,10 @@ jobs:
 
   commit_main_changes:
     needs: [setup_environment, skip_rollback_one_region, trigger_rollback_us_east_1_b, show_changes]
-    if: needs.trigger_rollback_us_east_1_b.result == 'success'
+    if: |
+      always() &&
+      (needs.skip_rollback_one_region.result == 'failure') &&
+      (needs.trigger_rollback_us_east_1_b.result == 'success')
     uses: ./.github/workflows/update-repo.yml
     with:
       files_to_apply: ${{ needs.setup_environment.outputs.files_to_apply }}
@@ -297,7 +300,7 @@ jobs:
     runs-on: ubuntu-latest
     if : |
       always() &&
-      (needs.skip_rollback_one_region.result == 'success') &&
+      (needs.skip_rollback_one_region.result == 'failure') &&
       (needs.us_east_1_b.result == 'success')
     steps:
       - name: Conditional Sleep
