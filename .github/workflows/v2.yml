@@ -266,6 +266,11 @@ jobs:
 
   trigger_rollback_us_east_1_b:
     needs: [setup_environment, us_east_1_b, skip_rollback_one_region]
+    if: |
+      always() &&
+      (needs.skip_rollback_one_region.result == 'failure') &&
+      (needs.us_east_1_b.result == 'success') &&
+      (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
     with:
       region: us-east-1-b
@@ -332,7 +337,7 @@ jobs:
     needs: [setup_environment, us_east_1, skip_rollback_two_regions]
     if: |
       always() &&
-      (needs.skip_rollback_two_regions.result == 'success') &&
+      (needs.skip_rollback_two_regions.result == 'failure') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
@@ -349,7 +354,7 @@ jobs:
     needs: [setup_environment, us_east_1, skip_rollback_two_regions]
     if: |
       always() &&
-      (needs.skip_rollback_two_regions.result == 'success') &&
+      (needs.skip_rollback_two_regions.result == 'failure') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
@@ -366,7 +371,7 @@ jobs:
     needs: [setup_environment, trigger_rollback_us_east_1, trigger_rollback_us_east_1_b, skip_rollback_two_regions, show_changes]
     if: | 
       always() &&
-      (needs.skip_rollback_two_regions.result == 'success') &&
+      (needs.skip_rollback_two_regions.result == 'failure') &&
       (needs.trigger_rollback_us_east_1.result == 'success') &&
       (needs.trigger_rollback_us_east_1_b.result == 'success')
     uses: ./.github/workflows/update-repo.yml
@@ -422,7 +427,7 @@ jobs:
     needs: [setup_environment, us_east_1, skip_rollback_three_regions]
     if: |
       always() &&
-      (needs.skip_rollback_three_regions.result == 'success') &&
+      (needs.skip_rollback_three_regions.result == 'failure') &&
       (needs.us_east_1.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
@@ -439,7 +444,7 @@ jobs:
     needs: [setup_environment, us_east_2, skip_rollback_three_regions]
     if: |
       always() &&
-      (needs.skip_rollback_three_regions.result == 'success') &&
+      (needs.skip_rollback_three_regions.result == 'failure') &&
       (needs.us_east_2.result == 'success') &&
       (needs.setup_environment.result == 'success')
     uses: ./.github/workflows/sync-regions.yml
@@ -458,7 +463,7 @@ jobs:
     uses: ./.github/workflows/sync-regions.yml
     if: |
       always() &&
-      (needs.skip_rollback_three_regions.result == 'success') &&
+      (needs.skip_rollback_three_regions.result == 'failure') &&
       (needs.us_east_2.result == 'success') &&
       (needs.setup_environment.result == 'success')
     with:
@@ -474,7 +479,7 @@ jobs:
     needs: [setup_environment, trigger_rollback_us_east_2, trigger_rollback_us_east_1_second_job, trigger_rollback_us_east_1_b_third_job, skip_rollback_three_regions, show_changes]
     if: | 
       always() &&
-      (needs.skip_rollback_three_regions.result == 'success') &&
+      (needs.skip_rollback_three_regions.result == 'failure') &&
       (needs.trigger_rollback_us_east_1_second_job.result == 'success') &&
       (needs.trigger_rollback_us_east_2.result == 'success') &&
       (needs.trigger_rollback_us_east_1_b_third_job.result == 'success')
