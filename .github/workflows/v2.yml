@@ -9,10 +9,10 @@ permissions:
 on:
   push:
     paths:
-      - "ca-certs/staging/*.yml"
-      - "consumers/staging/*.yml"
-      - "plugins/staging/*.yml"
-      - "services/staging/*.yml"
+      - "ca-certs/production/*.yml"
+      - "consumers/production/*.yml"
+      - "plugins/production/*.yml"
+      - "services/production/*.yml"
     branches:
       - "main"
 
@@ -58,7 +58,6 @@ jobs:
           echo "Arquivos alterados que correspondem aos filtros 'on:push:paths:' (de files.json):"
           cat $HOME/files.json
 
-          # Processa o files.json:
           content=$(jq -c 'map(select(endswith(".etlua") | not))' $HOME/files.json)
           
           echo "Arquivos filtrados para o apply (JSON final): $content"
