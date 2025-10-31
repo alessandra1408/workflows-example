@@ -71,7 +71,6 @@ services:
           - payments-stg.stone.com.br
         methods:
           - POST
-          - PUT
         protocols:
           - http
         paths:
