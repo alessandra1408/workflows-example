@@ -44,25 +44,33 @@ jobs:
           ref: 'main'
           fetch-depth: 0
 
-      - name: 'Get changed files and Stable SHA'
-        id: files_and_sha
+      - name: 'Get all changed files (trilom)'
+        id: file_changes
         uses: trilom/file-changes-action@1.2.4
         with:
           output: "json"
-          githubToken: ${{  secrets.GITHUB_TOKEN  }}
+          githubToken: ${{  secrets.GH_TOKEN }}
 
-      - name: 'Filter changed files'
+      - name: 'Get changed files (Sua Lógica)'
         id: get_files
         run: |
           set -ex
-          echo "Arquivos alterados que correspondem aos filtros 'on:push:paths:' (de files.json):"
+          echo "Arquivos alterados (lidos de files.json):"
           cat $HOME/files.json
-
-          content=$(jq -c 'map(select(endswith(".etlua") | not))' $HOME/files.json)
           
-          echo "Arquivos filtrados para o apply (JSON final): $content"
+          content=$(jq -r ".[]" $HOME/files.json | grep -E 'ca-certs/production|consumers/production|plugins/production|services/production' | grep -v '.etlua' | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          
+          echo "Arquivos filtrados para o apply: $content"
           echo "files=${content}" >> $GITHUB_OUTPUT
 
+      - name: 'Get Stable Commit SHA'
+        id: get_stable_sha
+        run: |
+          set -ex
+          # Usando git rev-parse, que é a forma correta e não depende da 'trilom' action
+          STABLE_SHA=$(git rev-parse HEAD~1)
+          echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
+      
       - name: '1. Determine Environment and Reviewers based on Label'
         id: determine_env
         env:
@@ -144,12 +152,6 @@ jobs:
 
             echo "Ambiente dinâmico '${rollback_env}' criado/atualizado com sucesso."
             echo "rollback_env=${rollback_env}" >> $GITHUB_OUTPUT
-
-      - name: 'Set Stable Commit SHA'
-        id: get_stable_sha
-        run: |
-          STABLE_SHA=$(jq -r '.commit_sha' $HOME/files_before.json)
-          echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
       
       - name: 'DEBUG: Final Outputs of setup_environment'
         run: |
