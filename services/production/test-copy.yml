@@ -1,0 +1,345 @@
+_format_version: "3.0"
+_info:
+  defaults: {}
+  select_tags:
+    - payment-card-api
+upstreams:
+  - name: payment-card-api-upstream
+    algorithm: round-robin
+    healthchecks:
+      threshold: 0
+      active:
+        type: https
+        http_path: /health_check/live
+        timeout: 3
+        concurrency: 10
+        healthy:
+          successes: 3
+          interval: 15
+          http_statuses:
+            - 200
+        unhealthy:
+          http_failures: 3
+          interval: 15
+          http_statuses:
+            - 500
+            - 501
+            - 502
+            - 503
+            - 504
+            - 505
+    targets:
+      - id: 30d192cb-35df-4066-bb76-cd106ef25ed3
+        target: payment-card-api.karavela-shared-pci-stg.aws.karavela.run:443
+        weight: 9999
+      - id: 0f3b1a2c-4d5e-4f8b-8c7d-9a6e0f2b1c3d
+        target: payment-card-cancel-api.karavela-shared-pci-stg.aws.karavela.run:443
+        weight: 1
+      - id: 0195d314-59f7-7763-ac0b-7dc9e38b7987
+        target: payment-card-api.stg.pagarme.net:443
+        weight: 0
+services:
+  - name: payment-card-api
+    enabled: true
+    host: payment-card-api-upstream
+    protocol: https
+    tls_verify: false
+    plugins:
+      - name: kong-plugin-gzip
+        enabled: true
+        protocols:
+          - http
+        config:
+          unzip_request: true
+          zip_response: true
+    routes:
+      - name: payment-card-api-healthcheck
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        methods:
+          - PUT
+          - GET
+        protocols:
+          - http
+        paths:
+          - /health_check
+        strip_path: false
+      - name: payment-card-api-v1-authorize
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        methods:
+          - POST
+          - PUT
+        protocols:
+          - http
+        paths:
+          - ~/v1/charges?$
+        strip_path: false
+        plugins:
+          - name: url-rewrite
+            enabled: true
+            protocols:
+              - http
+            config:
+              url: /v1/charge
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              header-keys:
+                - Authorization
+              bypass-if-headers:
+                - provider-key
+              iss-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2,https://auth-module-api.platform-k8s-stg.aws.pagarme.run
+              jwk-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2/.well-known/jwks.json,https://auth-module-api.platform-k8s-stg.aws.pagarme.run/.well-known/jwks.json
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              policy-key: null
+          - name: payments-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              providers:
+                - authmodule
+              keyRequired: true
+              searchKeyAlsoInBody: true
+              logOnly: true
+              authModuleOpts:
+                useJWT: true
+                applicationCredentialKey: "tenantSAKCredential"
+                applicationCredentialSdxKey: "tenantSAKSandboxCredential"
+              authLib:
+                clientId: ${{ env "DECK_KONG_IDP_CLIENT_ID" }}
+                clientSecret: ${{ env "DECK_KONG_IDP_CLIENT_SECRET" }}
+                tokenUrl: ${{ env "DECK_IDP_TOKEN_URL" }}
+                configUrl: ${{ env "DECK_PAYMENTS_AUTH_CONFIG_URL" }}
+          - name: custom-signals
+            enabled: true
+            protocols:
+              - http
+            config:
+              app_name: payment-card-api
+              trx_environment: stg
+              data_extractor: payment_card_api_auth
+      - name: payment-card-api-v1-probe
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        methods:
+          - GET
+        protocols:
+          - http
+        paths:
+          - ~/v1/charges?
+        strip_path: false
+        plugins:
+          - name: url-rewrite
+            enabled: true
+            protocols:
+              - http
+            config:
+              url: /v1/charge
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              header-keys:
+                - Authorization
+              bypass-if-headers:
+                - provider-key
+              iss-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2
+              jwk-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2/.well-known/jwks.json
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              policy-key: null
+      - name: payment-card-api-v1-capture
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        methods:
+          - POST
+        protocols:
+          - http
+        paths:
+          - ~/v1/charges?/(?<charge_id>\S+)/capture
+        strip_path: false
+        plugins:
+          - name: url-rewrite
+            enabled: true
+            protocols:
+              - http
+            config:
+              url: /v1/charge/<charge_id>/capture
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              header-keys:
+                - Authorization
+              bypass-if-headers:
+                - provider-key
+              iss-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2
+              jwk-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2/.well-known/jwks.json
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              policy-key: null
+          - name: custom-signals
+            enabled: true
+            protocols:
+              - http
+            config:
+              app_name: payment-card-api
+              trx_environment: stg
+              data_extractor: payment_card_api_capture
+      - name: payment-card-api-pos
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        protocols:
+          - http
+        paths:
+          - /transactions/pos
+        methods:
+          - POST
+        plugins:
+          - name: url-rewrite
+            enabled: true
+            protocols:
+              - http
+            config:
+              url: /transactions/authorize
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              header-keys:
+                - Authorization
+              bypass-if-headers:
+                - provider-key
+              iss-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2
+              jwk-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2/.well-known/jwks.json
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              policy-key: null
+      - name: payment-card-api-capture
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        protocols:
+          - http
+        methods:
+          - POST
+        paths:
+          - /transactions/capture
+        strip_path: false
+        plugins:
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              header-keys:
+                - Authorization
+              bypass-if-headers:
+                - provider-key
+              iss-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2
+              jwk-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2/.well-known/jwks.json
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              policy-key: null
+          - name: custom-signals
+            enabled: true
+            protocols:
+              - http
+            config:
+              app_name: payment-card-api
+              trx_environment: stg
+              data_extractor: payment_card_api_capture
+      - name: payment-card-api-refund
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        protocols:
+          - http
+        methods:
+          - POST
+        paths:
+          - /transactions/refund
+        plugins:
+          - name: url-rewrite
+            enabled: true
+            protocols:
+              - http
+            config:
+              url: /transactions/cancel
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              header-keys:
+                - Authorization
+              bypass-if-headers:
+                - provider-key
+              iss-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2
+              jwk-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2/.well-known/jwks.json
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              policy-key: null
+          - name: custom-signals
+            enabled: true
+            protocols:
+              - http
+            config:
+              app_name: payment-card-api
+              trx_environment: stg
+              data_extractor: payment_card_api_reversal
+      - name: payment-card-api-v1-verify-card
+        hosts:
+          - payments.stone.com.br
+          - payments-stg.stone.com.br
+        methods:
+          - POST
+        protocols:
+          - http
+        paths:
+          - /v1/cards/verify
+        strip_path: false
+        plugins:
+          - name: jwt-auth
+            enabled: true
+            protocols:
+              - http
+            config:
+              header-keys:
+                - Authorization
+              bypass-if-headers:
+                - provider-key
+              iss-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2
+              jwk-urls: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_QxSFCyeR2/.well-known/jwks.json
+              jwt-config:
+                permitted-algs: null
+                permitted-token-types: null
+                required-claims: null
+              policy-key: null
+    tags:
+      - payment-card-api
