@@ -44,17 +44,30 @@ jobs:
           ref: 'main'
           fetch-depth: 0
 
-      - name: 'Get changed files'
+      - name: 'Get changed files and Stable SHA'
+        id: files_and_sha
+        uses: trilom/file-changes-action@1.2.4
+        with:
+          output: "json"
+          githubToken: ${{  secrets.GITHUB_TOKEN  }}
+
+      - name: 'Filter changed files'
         id: get_files
         run: |
           set -ex
-          content=$(git diff --name-only HEAD~1 HEAD | grep -E 'ca-certs/staging|...' | jq -R -s -c 'split("\n")[:-1]')
+          echo "Arquivos alterados que correspondem aos filtros 'on:push:paths:' (de files.json):"
+          cat $HOME/files.json
+
+          # Processa o files.json:
+          content=$(jq -c 'map(select(endswith(".etlua") | not))' $HOME/files.json)
+          
+          echo "Arquivos filtrados para o apply (JSON final): $content"
           echo "files=${content}" >> $GITHUB_OUTPUT
 
       - name: '1. Determine Environment and Reviewers based on Label'
         id: determine_env
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
 
@@ -133,11 +146,10 @@ jobs:
             echo "Ambiente dinâmico '${rollback_env}' criado/atualizado com sucesso."
             echo "rollback_env=${rollback_env}" >> $GITHUB_OUTPUT
 
-      - name: '2. Get Stable Commit SHA'
+      - name: 'Set Stable Commit SHA'
         id: get_stable_sha
         run: |
-          set -ex
-          STABLE_SHA=$(git rev-parse HEAD~1)
+          STABLE_SHA=$(jq -r '.commit_sha' $HOME/files_before.json)
           echo "sha=$STABLE_SHA" >> $GITHUB_OUTPUT
       
       - name: 'DEBUG: Final Outputs of setup_environment'
@@ -200,7 +212,7 @@ jobs:
               echo "Rollback de arquivo novo. Criando 'stub' de deleção para $file"
               TAG_NAME=$(basename "$file" .yml)
               
-              printf "_format_version: \"3.0\"\n_tags:\n  - %s\n" "$TAG_NAME" > "$file"
+              printf "_format_version: \"3.0\"\n_info:\n  defaults: {}\n  select_tags:\n    - %s\n" "$TAG_NAME" > "$file"
               
               git add "$file"
             fi
