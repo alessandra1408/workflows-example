@@ -300,7 +300,7 @@ jobs:
     runs-on: ubuntu-latest
     if : |
       always() &&
-      (needs.skip_rollback_one_region.result == 'failure') &&
+      (needs.skip_rollback_one_region.result == 'success') &&
       (needs.us_east_1_b.result == 'success')
     steps:
       - name: Conditional Sleep
