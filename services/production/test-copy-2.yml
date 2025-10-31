@@ -63,6 +63,7 @@ services:
         methods:
           - POST
           - POST
+          - DELETE
         strip_path: false
       - name: payment-card-cancel-api-v1-cancel
         protocols:
