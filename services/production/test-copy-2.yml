@@ -62,6 +62,7 @@ services:
           - /health_check
         methods:
           - POST
+          - POST
         strip_path: false
       - name: payment-card-cancel-api-v1-cancel
         protocols:
@@ -73,7 +74,6 @@ services:
           - ~/v1/charges?/cancel
         methods:
           - POST
-          - GET
         strip_path: false
         plugins:
           - name: url-rewrite
