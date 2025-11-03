@@ -211,7 +211,33 @@ jobs:
             else
               
               echo "Rollback de arquivo novo. Criando 'stub' de deleção para $file"
-              TAG_NAME=$(basename "$file" .yml)
+              
+              base_filename=$(basename "$file" .yml)
+              
+              top_dir=$(echo "$file" | cut -d'/' -f1)
+
+              TAG_NAME=""
+
+              case "$top_dir" in
+                "consumers")
+                  TAG_NAME="consumer-${base_filename}"
+                  ;;
+                "plugins")
+                  TAG_NAME="plugin-${base_filename}"
+                  ;;
+                "ca-certs")
+                  TAG_NAME="ca-cert-${base_filename}"
+                  ;;
+                "services")
+                  TAG_NAME="${base_filename}"
+                  ;;
+                *)
+                  echo "Aviso: Diretório '$top_dir' não reconhecido. Usando tag padrão."
+                  TAG_NAME="${base_filename}"
+                  ;;
+              esac
+              
+              echo "Gerando tag: $TAG_NAME"
               
               printf "_format_version: \"3.0\"\n_info:\n  defaults: {}\n  select_tags:\n    - %s\n" "$TAG_NAME" > "$file"
               
