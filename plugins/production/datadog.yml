@@ -1,0 +1,13 @@
+_format_version: "3.0"
+_info:
+  defaults: {}
+  select_tags:
+    - datadog
+plugins:
+  - name: datadog
+    enabled: false
+    config:
+      host: 127.0.0.1
+      port: 8125
+      flush_timeout: 2
+      retry_count: 10
