@@ -239,6 +239,10 @@ jobs:
               
               echo "Gerando tag: $TAG_NAME"
               
+              DIR_NAME=$(dirname "$file")
+            
+              mkdir -p "$DIR_NAME"
+
               printf "_format_version: \"3.0\"\n_info:\n  defaults: {}\n  select_tags:\n    - %s\n" "$TAG_NAME" > "$file"
               
               git add "$file"
