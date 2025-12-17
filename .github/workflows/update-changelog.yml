@@ -1,0 +1,31 @@
+name: Update Changelog File
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Atualizar CHANGELOG.md
+        uses: stefanzweifel/changelog-updater-action@v1
+        with:
+          release-notes: ${{ github.event.release.body }}
+          latest-version: ${{ github.event.release.tag_name }}
+          compare-url-target-revision: ${{ github.event.release.target_commitish }}
+          path-to-changelog: CHANGELOG.md
+
+      - name: Commitar Alteração
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: update changelog for ${{ github.event.release.tag_name }} [skip ci]"
+          file_pattern: CHANGELOG.md
