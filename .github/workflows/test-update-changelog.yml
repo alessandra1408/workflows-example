@@ -28,9 +28,12 @@ jobs:
             - name: Get previous release tag
               id: previous_tag
               run: |
+                # Obtém a tag atual da release
                 CURRENT_TAG="${{ github.event.release.tag_name }}"
-                PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "^v" | grep -A1 "$CURRENT_TAG" | tail -1)
+                PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -vx "${CURRENT_TAG}" | head -n 1)
+
                 echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+                echo "Current tag: $CURRENT_TAG"
                 echo "Previous tag: $PREVIOUS_TAG"
 
             - name: Get commits between releases
@@ -40,13 +43,16 @@ jobs:
                 PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
                 
                 if [ -z "$PREVIOUS_TAG" ]; then
-                    echo "No previous tag found, using all commits"
-                    COMMITS=$(git log "$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges)
+                    echo "No previous tag found, getting commits only for current tag"
+                    # Pega apenas commits que estão na tag atual (não em outras tags)
+                    COMMITS=$(git log "$CURRENT_TAG" --not --tags="v*" --tags="!$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges 2>/dev/null || git log "$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges | head -10)
                 else
+                    echo "Getting commits between $PREVIOUS_TAG and $CURRENT_TAG"
                     COMMITS=$(git log "$PREVIOUS_TAG..$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges)
                 fi
                 
                 echo "$COMMITS" > /tmp/commits.txt
+                echo "Commits found:"
                 cat /tmp/commits.txt
 
             - name: Parse commits and generate changelog entry
@@ -160,3 +166,4 @@ jobs:
                 file_pattern: CHANGELOG.md
                 commit_user_name: github-actions[bot]
                 commit_user_email: github-actions[bot]@users.noreply.github.com
+
