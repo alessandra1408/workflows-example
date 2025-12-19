@@ -1,6 +1,14 @@
 # Changelog
 
 
+## [release/v1.0.3](https://github.com/alessandra1408/workflows-example/compare/rollback/pr-_20251104134132...release/v1.0.3) (2025-12-19)
+### Features
+
+* adds new test6 file ([#195](https://github.com/alessandra1408/workflows-example/issues/195)) ([9baf8f3](https://github.com/alessandra1408/workflows-example/commit/9baf8f3))
+* adds changelog and pipe to updatetd it ([1fee189](https://github.com/alessandra1408/workflows-example/commit/1fee189))
+* adds new consumer 4 ([f78c1be](https://github.com/alessandra1408/workflows-example/commit/f78c1be))
+
+
 ## release/v1.0.2 (2025-12-19)
 ### Features
 
