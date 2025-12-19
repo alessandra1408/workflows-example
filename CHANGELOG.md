@@ -1,5 +1,19 @@
 # Changelog
 
+## [release/v1.0.7](https://github.com/alessandra1408/workflows-example/compare/release/v1.0.6...release/v1.0.7) (2025-12-19)
+
+### Features
+
+* adds test11 file test () ([#200](https://github.com/alessandra1408/workflows-example/issues/200)) ([e949ea8](https://github.com/alessandra1408/workflows-example/commit/e949ea8))
+
+### Documentation
+
+* update changelog for release/v1.0.6 [skip ci] ([a242c0f](https://github.com/alessandra1408/workflows-example/commit/a242c0f))
+
+### Maintenance
+
+* updates changelog pipe ([53f7888](https://github.com/alessandra1408/workflows-example/commit/53f7888))
+
 ## [1.0.6](https://github.com/alessandra1408/workflows-example/compare/release/v1.0.5...release/v1.0.6) (2025-12-19)
 
 ### Documentation
