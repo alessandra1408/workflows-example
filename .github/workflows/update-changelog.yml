@@ -1,5 +1,8 @@
 name: Update Changelog File
 
+permissions:
+  contents: write
+
 on:
   release:
     types: [published]
@@ -11,21 +14,168 @@ jobs:
       contents: write
     
     steps:
+      - name: Set up Github App token
+        uses: actions/create-github-app-token@v2
+        id: app_token
+        with:
+          app-id: 858877
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: stone-payments
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: main
+          fetch-depth: 0
+          token: ${{ steps.app_token.outputs.token }}
 
-      - name: Atualizar CHANGELOG.md
-        uses: stefanzweifel/changelog-updater-action@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          release-notes: ${{ github.event.release.body }}
-          latest-version: ${{ github.event.release.tag_name }}
-          compare-url-target-revision: ${{ github.event.release.target_commitish }}
-          path-to-changelog: CHANGELOG.md
+          node-version: '20'
 
-      - name: Commitar Alteração
+      - name: Get previous release tag
+        id: previous_tag
+        run: |
+          CURRENT_TAG="${{ github.event.release.tag_name }}"
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "^release/" | grep -A1 "$CURRENT_TAG" | tail -1)
+          echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+          echo "Previous tag: $PREVIOUS_TAG"
+
+      - name: Get commits between releases
+        id: commits
+        run: |
+          CURRENT_TAG="${{ github.event.release.tag_name }}"
+          PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "No previous tag found, using all commits"
+            COMMITS=$(git log "$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges)
+          else
+            COMMITS=$(git log "$PREVIOUS_TAG..$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges)
+          fi
+          
+          echo "$COMMITS" > /tmp/commits.txt
+          cat /tmp/commits.txt
+
+      - name: Parse commits and generate changelog entry
+        id: generate_entry
+        run: |
+          cat > /tmp/parse_commits.js << 'EOF'
+          const fs = require('fs');
+          const commits = fs.readFileSync('/tmp/commits.txt', 'utf8').split('\n').filter(Boolean);
+          
+          const features = [];
+          const fixes = [];
+          const others = [];
+          
+          commits.forEach(line => {
+            const [hash, ...messageParts] = line.split('|');
+            const message = messageParts.join('|');
+            
+            // Extract PR number if exists
+            const prMatch = message.match(/\(#(\d+)\)/);
+            const prNumber = prMatch ? prMatch[1] : null;
+            
+            // Clean message
+            let cleanMessage = message.replace(/\(#\d+\)/, '').trim();
+            
+            // Categorize by conventional commit prefix
+            if (message.match(/^feat(\(.*?\))?:/i)) {
+              cleanMessage = cleanMessage.replace(/^feat(\(.*?\))?:\s*/i, '');
+              const scope = message.match(/^feat\((.*?)\):/i)?.[1];
+              const entry = scope 
+                ? `* **${scope}:** ${cleanMessage}${prNumber ? ` ([#${prNumber}](https://github.com/stone-payments/external-gateway/issues/${prNumber}))` : ''} ([${hash}](https://github.com/stone-payments/external-gateway/commit/${hash}))`
+                : `* ${cleanMessage}${prNumber ? ` ([#${prNumber}](https://github.com/stone-payments/external-gateway/issues/${prNumber}))` : ''} ([${hash}](https://github.com/stone-payments/external-gateway/commit/${hash}))`;
+              features.push(entry);
+            } else if (message.match(/^fix(\(.*?\))?:/i)) {
+              cleanMessage = cleanMessage.replace(/^fix(\(.*?\))?:\s*/i, '');
+              const scope = message.match(/^fix\((.*?)\):/i)?.[1];
+              const entry = scope
+                ? `* **${scope}:** ${cleanMessage}${prNumber ? ` ([#${prNumber}](https://github.com/stone-payments/external-gateway/issues/${prNumber}))` : ''} ([${hash}](https://github.com/stone-payments/external-gateway/commit/${hash}))`
+                : `* ${cleanMessage}${prNumber ? ` ([#${prNumber}](https://github.com/stone-payments/external-gateway/issues/${prNumber}))` : ''} ([${hash}](https://github.com/stone-payments/external-gateway/commit/${hash}))`;
+              fixes.push(entry);
+            } else if (!message.match(/^(chore|ci|docs|style|refactor|test|build)(\(.*?\))?:/i)) {
+              // If no conventional commit prefix, try to guess
+              if (message.match(/^(add|update|implement|create)/i)) {
+                const entry = `* ${cleanMessage}${prNumber ? ` ([#${prNumber}](https://github.com/stone-payments/external-gateway/issues/${prNumber}))` : ''} ([${hash}](https://github.com/stone-payments/external-gateway/commit/${hash}))`;
+                features.push(entry);
+              } else if (message.match(/^(fix|correct|resolve)/i)) {
+                const entry = `* ${cleanMessage}${prNumber ? ` ([#${prNumber}](https://github.com/stone-payments/external-gateway/issues/${prNumber}))` : ''} ([${hash}](https://github.com/stone-payments/external-gateway/commit/${hash}))`;
+                fixes.push(entry);
+              }
+            }
+          });
+          
+          let changelog = '';
+          if (features.length > 0) {
+            changelog += '\n### Features\n\n' + features.join('\n') + '\n';
+          }
+          if (fixes.length > 0) {
+            changelog += '\n### Bug Fixes\n\n' + fixes.join('\n') + '\n';
+          }
+          
+          fs.writeFileSync('/tmp/changelog_entry.txt', changelog);
+          EOF
+          
+          node /tmp/parse_commits.js
+          cat /tmp/changelog_entry.txt
+
+      - name: Update CHANGELOG.md
+        run: |
+          CURRENT_TAG="${{ github.event.release.tag_name }}"
+          PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
+          VERSION="${CURRENT_TAG#release/}"
+          PREVIOUS_VERSION="${PREVIOUS_TAG#release/}"
+          DATE=$(date -u +%Y-%m-%d)
+          
+          CHANGELOG_ENTRY=$(cat /tmp/changelog_entry.txt)
+          
+          # Create new entry
+          if [ -z "$PREVIOUS_TAG" ]; then
+            NEW_ENTRY="## ${VERSION} (${DATE})${CHANGELOG_ENTRY}"
+          else
+            NEW_ENTRY="## [${VERSION}](https://github.com/stone-payments/external-gateway/compare/${PREVIOUS_TAG}...${CURRENT_TAG}) (${DATE})${CHANGELOG_ENTRY}"
+          fi
+          
+          # Read current changelog
+          if [ -f CHANGELOG.md ]; then
+            # Find the line after the header and insert new entry
+            awk -v new_entry="$NEW_ENTRY" '
+              /^# Changelog/ {
+                print;
+                getline;
+                print;
+                getline;
+                if ($0 ~ /^All notable changes/) {
+                  print;
+                  print "";
+                  print new_entry;
+                  print "";
+                } else {
+                  print "";
+                  print new_entry;
+                  print "";
+                  print;
+                }
+                next;
+              }
+              { print }
+            ' CHANGELOG.md > CHANGELOG.md.new
+            mv CHANGELOG.md.new CHANGELOG.md
+          else
+            # Create new changelog
+            echo "# Changelog" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines." >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "$NEW_ENTRY" >> CHANGELOG.md
+          fi
+
+      - name: Commit Change
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "docs: update changelog for ${{ github.event.release.tag_name }} [skip ci]"
           file_pattern: CHANGELOG.md
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
