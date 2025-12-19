@@ -1,0 +1,27 @@
+_format_version: "3.0"
+_info:
+  defaults: {}
+  select_tags:
+    - test10
+
+services:
+  - name: test10
+    enabled: true
+    host: test10
+    port: 443
+    tls_verify: false
+    protocol: https
+    routes:
+      - name: test10-route
+        hosts:
+          - test.com
+        methods:
+          - GET
+          - POST
+        protocols:
+          - http
+        paths:
+          - /auth/teste
+        strip_path: false
+    tags:
+      - test10
