@@ -1,6 +1,16 @@
 # Changelog
+
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [release/v1.0.8](https://github.com/alessandra1408/workflows-example/compare/release/v1.0.7...release/v1.0.8) (2025-12-19)
+
+### Documentation
+
+* update changelog for release/v1.0.7 [skip ci] ([63785cd](https://github.com/alessandra1408/workflows-example/commit/63785cd))
+
+### Maintenance
+
+* updates test update changelog pipeline ([5f3dc6e](https://github.com/alessandra1408/workflows-example/commit/5f3dc6e))
 
 ## [release/v1.0.7](https://github.com/alessandra1408/workflows-example/compare/release/v1.0.6...release/v1.0.7) (2025-12-19)
 
