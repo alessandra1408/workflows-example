@@ -28,27 +28,39 @@ jobs:
             - name: Get previous release tag
               id: previous_tag
               run: |
+                # Garante que temos todas as tags atualizadas
+                git fetch --tags --force
+
+                # Pega a tag atual (do evento de release ou do contexto da execução)
                 CURRENT_TAG="${{ github.event.release.tag_name }}"
-                # Ordena por data de criação para garantir a ordem cronológica correta
+                if [ -z "$CURRENT_TAG" ]; then CURRENT_TAG="${{ github.ref_name }}"; fi
+
+                # Busca a tag anterior cronológica excluindo a atual
                 PREVIOUS_TAG=$(git tag --sort=-creatordate | grep -vx "${CURRENT_TAG}" | head -n 1)
                 
                 echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+                echo "current_tag=$CURRENT_TAG" >> $GITHUB_OUTPUT
                 echo "Current tag: $CURRENT_TAG"
                 echo "Previous tag: $PREVIOUS_TAG"
 
             - name: Get commits between releases
               id: commits
               run: |
-                CURRENT_TAG="${{ github.event.release.tag_name }}"
+                CURRENT_TAG="${{ steps.previous_tag.outputs.current_tag }}"
                 PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
                 
                 if [ -z "$PREVIOUS_TAG" ]; then
-                    # Se for a primeira release, busca os últimos 100 commits
-                    COMMITS=$(git log "$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges -n 100)
+                    echo "No previous tag found, getting last 50 commits"
+                    COMMITS=$(git log "$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges -n 50)
                 else
+                    echo "Getting commits between $PREVIOUS_TAG and $CURRENT_TAG"
                     COMMITS=$(git log "$PREVIOUS_TAG..$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges)
                 fi
                 
+                # Debug: Mostrar o que foi encontrado
+                echo "--- COMMITS FOUND ---"
+                echo "$COMMITS"
+                echo "---------------------"
                 echo "$COMMITS" > /tmp/commits.txt
 
             - name: Parse commits and generate changelog entry
@@ -64,7 +76,6 @@ jobs:
                 const repoOwner = process.env.REPO_OWNER;
                 const repoName = process.env.REPO_NAME;
                 
-                // Mapeamento completo de Conventional Commits
                 const categories = {
                     feat: 'Features',
                     fix: 'Bug Fixes',
@@ -74,8 +85,6 @@ jobs:
                     style: 'Styles',
                     refactor: 'Code Refactoring',
                     test: 'Tests',
-                    build: 'Build System',
-                    ci: 'Continuous Integration',
                     chore: 'Chores'
                 };
                 
@@ -87,9 +96,10 @@ jobs:
                     const message = messageParts.join('|');
                     const shortHash = hash.substring(0, 7);
                     
-                    // Regex para capturar tipo, escopo opcional e breaking changes (!)
+                    // Regex aprimorada: Captura tipo, escopo, breaking change (!)
                     const match = message.match(/^(\w+)(?:\((.*?)\))?(!?):/);
-                    const prMatch = message.match(/\(#(\d+)\)/);
+                    // Regex de PR flexível: Aceita #123 ou (#123)
+                    const prMatch = message.match(/#(\d+)/); 
                     const prNumber = prMatch ? prMatch[1] : null;
                     
                     if (match) {
@@ -98,7 +108,7 @@ jobs:
                         const isBreaking = match[3] === '!';
                         const categoryName = categories[type] || 'Chores';
                         
-                        let cleanMessage = message.replace(/^.*?:\s*/, '').replace(/\(#\d+\)/, '').trim();
+                        let cleanMessage = message.replace(/^.*?:\s*/, '').replace(/\(#\d+\)/, '').replace(/#\d+/, '').trim();
                         
                         let entry = `* ${scope ? `**${scope}:** ` : ''}${cleanMessage}`;
                         if (isBreaking) entry = `* **BREAKING CHANGE:** ${cleanMessage}`;
@@ -113,8 +123,7 @@ jobs:
                 });
                 
                 let changelog = '';
-                // Itera sobre as categorias para manter uma ordem lógica no arquivo
-                const displayOrder = ['Features', 'Bug Fixes', 'Performance Improvements', 'Reverts', 'Code Refactoring', 'Documentation', 'Styles', 'Chores'];
+                const displayOrder = ['Features', 'Bug Fixes', 'Performance Improvements', 'Code Refactoring', 'Documentation', 'Chores'];
                 
                 displayOrder.forEach(title => {
                     if (groups[title] && groups[title].length > 0) {
@@ -129,8 +138,9 @@ jobs:
 
             - name: Update CHANGELOG.md
               run: |
-                CURRENT_TAG="${{ github.event.release.tag_name }}"
+                CURRENT_TAG="${{ steps.previous_tag.outputs.current_tag }}"
                 PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
+                # Limpa v1.0.0 ou release/v1.0.0 para apenas 1.0.0
                 VERSION_CLEAN=$(echo "$CURRENT_TAG" | sed -E 's/.*\/v?|v//')
                 DATE=$(date +%Y-%m-%d)
                 REPO_URL="https://github.com/${{ github.repository }}"
@@ -146,34 +156,22 @@ jobs:
                 NEW_ENTRY="$VERSION_HEADER$CHANGELOG_CONTENT"
 
                 if [ -f CHANGELOG.md ]; then
+                    # Garante que o conteúdo novo entre logo após o cabeçalho inicial
                     awk -v new_entry="$NEW_ENTRY" '
                         BEGIN { found = 0 }
                         /^# Changelog/ { print; next }
                         /All notable changes/ { 
-                            print; 
-                            print ""; 
-                            print new_entry; 
-                            print ""; 
-                            found = 1; 
-                            next 
+                            print; print ""; print new_entry; print ""; found = 1; next 
                         }
                         { print }
                         END { if (found == 0) print "\n" new_entry }
                     ' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
                 else
-                    {
-                    echo "# Changelog"
-                    echo ""
-                    echo "All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines."
-                    echo ""
-                    echo "$NEW_ENTRY"
-                    } > CHANGELOG.md
+                    echo -e "# Changelog\n\nAll notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.\n\n$NEW_ENTRY" > CHANGELOG.md
                 fi
 
             - name: Commit Change
               uses: stefanzweifel/git-auto-commit-action@v5
               with:
-                commit_message: "docs: update changelog for ${{ github.event.release.tag_name }} [skip ci]"
+                commit_message: "docs: update changelog for ${{ steps.previous_tag.outputs.current_tag }} [skip ci]"
                 file_pattern: CHANGELOG.md
-                commit_options: '--no-verify'
-                repository: .
