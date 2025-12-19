@@ -29,6 +29,7 @@ jobs:
               id: previous_tag
               run: |
                 CURRENT_TAG="${{ github.event.release.tag_name }}"
+                # Ordena por data de criação para garantir a ordem cronológica correta
                 PREVIOUS_TAG=$(git tag --sort=-creatordate | grep -vx "${CURRENT_TAG}" | head -n 1)
                 
                 echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
@@ -42,7 +43,8 @@ jobs:
                 PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
                 
                 if [ -z "$PREVIOUS_TAG" ]; then
-                    COMMITS=$(git log "$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges -n 50)
+                    # Se for a primeira release, busca os últimos 100 commits
+                    COMMITS=$(git log "$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges -n 100)
                 else
                     COMMITS=$(git log "$PREVIOUS_TAG..$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges)
                 fi
@@ -62,12 +64,19 @@ jobs:
                 const repoOwner = process.env.REPO_OWNER;
                 const repoName = process.env.REPO_NAME;
                 
+                // Mapeamento completo de Conventional Commits
                 const categories = {
                     feat: 'Features',
                     fix: 'Bug Fixes',
                     perf: 'Performance Improvements',
+                    revert: 'Reverts',
                     docs: 'Documentation',
-                    refactor: 'Code Refactoring'
+                    style: 'Styles',
+                    refactor: 'Code Refactoring',
+                    test: 'Tests',
+                    build: 'Build System',
+                    ci: 'Continuous Integration',
+                    chore: 'Chores'
                 };
                 
                 const groups = {};
@@ -78,37 +87,40 @@ jobs:
                     const message = messageParts.join('|');
                     const shortHash = hash.substring(0, 7);
                     
-                    const match = message.match(/^(\w+)(?:\((.*?)\))?!?:/);
+                    // Regex para capturar tipo, escopo opcional e breaking changes (!)
+                    const match = message.match(/^(\w+)(?:\((.*?)\))?(!?):/);
                     const prMatch = message.match(/\(#(\d+)\)/);
                     const prNumber = prMatch ? prMatch[1] : null;
                     
-                    let cleanMessage = message.replace(/\(#\d+\)/, '').trim();
-
                     if (match) {
                         const type = match[1].toLowerCase();
                         const scope = match[2];
-                        const categoryName = categories[type];
+                        const isBreaking = match[3] === '!';
+                        const categoryName = categories[type] || 'Chores';
                         
-                        if (categoryName) {
-                            cleanMessage = cleanMessage.replace(/^.*?:\s*/, '');
-                            
-                            let entry = `* ${scope ? `**${scope}:** ` : ''}${cleanMessage}`;
-                            if (prNumber) {
-                                entry += ` ([#${prNumber}](https://github.com/${repoOwner}/${repoName}/issues/${prNumber}))`;
-                            }
-                            entry += ` ([${shortHash}](https://github.com/${repoOwner}/${repoName}/commit/${hash}))`;
-                            
-                            groups[categoryName].push(entry);
+                        let cleanMessage = message.replace(/^.*?:\s*/, '').replace(/\(#\d+\)/, '').trim();
+                        
+                        let entry = `* ${scope ? `**${scope}:** ` : ''}${cleanMessage}`;
+                        if (isBreaking) entry = `* **BREAKING CHANGE:** ${cleanMessage}`;
+                        
+                        if (prNumber) {
+                            entry += ` ([#${prNumber}](https://github.com/${repoOwner}/${repoName}/issues/${prNumber}))`;
                         }
+                        entry += ` ([${shortHash}](https://github.com/${repoOwner}/${repoName}/commit/${hash}))`;
+                        
+                        groups[categoryName].push(entry);
                     }
                 });
                 
                 let changelog = '';
-                for (const [title, entries] of Object.entries(groups)) {
-                    if (entries.length > 0) {
-                        changelog += `\n\n### ${title}\n\n${entries.join('\n')}`;
+                // Itera sobre as categorias para manter uma ordem lógica no arquivo
+                const displayOrder = ['Features', 'Bug Fixes', 'Performance Improvements', 'Reverts', 'Code Refactoring', 'Documentation', 'Styles', 'Chores'];
+                
+                displayOrder.forEach(title => {
+                    if (groups[title] && groups[title].length > 0) {
+                        changelog += `\n\n### ${title}\n\n${groups[title].join('\n')}`;
                     }
-                }
+                });
                 
                 fs.writeFileSync('/tmp/changelog_entry.txt', changelog);
                 EOF
@@ -134,20 +146,28 @@ jobs:
                 NEW_ENTRY="$VERSION_HEADER$CHANGELOG_CONTENT"
 
                 if [ -f CHANGELOG.md ]; then
-                    # Insere após a linha do standard-version ou após o título principal
                     awk -v new_entry="$NEW_ENTRY" '
                         BEGIN { found = 0 }
                         /^# Changelog/ { print; next }
-                        /All notable changes/ { print; print ""; print new_entry; found = 1; next }
+                        /All notable changes/ { 
+                            print; 
+                            print ""; 
+                            print new_entry; 
+                            print ""; 
+                            found = 1; 
+                            next 
+                        }
                         { print }
                         END { if (found == 0) print "\n" new_entry }
                     ' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
                 else
-                    echo "# Changelog" > CHANGELOG.md
-                    echo "" >> CHANGELOG.md
-                    echo "All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines." >> CHANGELOG.md
-                    echo "" >> CHANGELOG.md
-                    echo "$NEW_ENTRY" >> CHANGELOG.md
+                    {
+                    echo "# Changelog"
+                    echo ""
+                    echo "All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines."
+                    echo ""
+                    echo "$NEW_ENTRY"
+                    } > CHANGELOG.md
                 fi
 
             - name: Commit Change
@@ -155,3 +175,5 @@ jobs:
               with:
                 commit_message: "docs: update changelog for ${{ github.event.release.tag_name }} [skip ci]"
                 file_pattern: CHANGELOG.md
+                commit_options: '--no-verify'
+                repository: .
