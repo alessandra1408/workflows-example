@@ -169,3 +169,13 @@
 ### Chores
 
 * updates workflows ([0551779](https://github.com/alessandra1408/workflows-example/commit/0551779))
+
+## [1.0.6](https://github.com/alessandra1408/workflows-example/compare/release/v1.0.5...release/v1.0.6) (2025-12-19)
+
+### Documentation
+
+* update changelog for release/v1.0.5 [skip ci] ([d346ff9](https://github.com/alessandra1408/workflows-example/commit/d346ff9))
+
+### Chores
+
+* adds test 10 file ([#199](https://github.com/alessandra1408/workflows-example/issues/199)) ([62c8d78](https://github.com/alessandra1408/workflows-example/commit/62c8d78))
