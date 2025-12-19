@@ -28,13 +28,14 @@ jobs:
             - name: Get previous release tag
               id: previous_tag
               run: |
-                # Garante que o ambiente tenha todas as tags para comparação
+                # Garante que o ambiente tenha acesso a todas as tags
                 git fetch --tags --force
                 
+                # Identifica a tag atual (suporta manual ou release)
                 CURRENT_TAG="${{ github.event.release.tag_name }}"
                 if [ -z "$CURRENT_TAG" ]; then CURRENT_TAG="${{ github.ref_name }}"; fi
 
-                # Busca a tag anterior por data de criação (independente do nome)
+                # Busca a tag cronologicamente anterior à atual
                 PREVIOUS_TAG=$(git tag --sort=-creatordate | grep -vx "${CURRENT_TAG}" | head -n 1)
                 
                 echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
@@ -48,90 +49,115 @@ jobs:
                 PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
                 
                 if [ -z "$PREVIOUS_TAG" ]; then
+                    # Se não houver anterior, pega os últimos 50 commits da tag atual
                     COMMITS=$(git log "$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges -n 50)
                 else
+                    # Compara a tag anterior com a atual
                     COMMITS=$(git log "$PREVIOUS_TAG..$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges)
                 fi
                 
                 echo "$COMMITS" > /tmp/commits.txt
+                echo "--- LOG DE COMMITS ---"
+                cat /tmp/commits.txt
 
-            - name: Parse commits and generate changelog entry
-              id: generate_entry
+            - name: Update CHANGELOG.md
               run: |
-                cat > /tmp/parse_commits.js << 'EOF'
-                const fs = require('fs');
-                const commits = fs.readFileSync('/tmp/commits.txt', 'utf8').split('\n').filter(Boolean);
+                # Passamos as variáveis necessárias para o Node
+                export CURRENT_TAG="${{ steps.previous_tag.outputs.current_tag }}"
+                export PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
+                export REPO="${{ github.repository }}"
                 
+                node << 'EOF'
+                const fs = require('fs');
+                const { execSync } = require('child_process');
+
+                const currentTag = process.env.CURRENT_TAG;
+                const previousTag = process.env.PREVIOUS_TAG;
+                const repo = process.env.REPO;
+                const date = new Date().toISOString().split('T')[0];
+                const version = currentTag.replace(/.*\/v?|v/, '');
+
+                // 1. Parse dos Commits
+                const commitsRaw = fs.readFileSync('/tmp/commits.txt', 'utf8').split('\n').filter(Boolean);
                 const categories = {
                     feat: 'Features',
                     fix: 'Bug Fixes',
                     perf: 'Performance Improvements',
+                    revert: 'Reverts',
                     docs: 'Documentation',
+                    style: 'Styles',
+                    refactor: 'Code Refactoring',
+                    test: 'Tests',
                     chore: 'Maintenance'
                 };
-                
-                const groups = { 'Features': [], 'Bug Fixes': [], 'Performance Improvements': [], 'Documentation': [], 'Maintenance': [] };
 
-                commits.forEach(line => {
+                const groups = {};
+                Object.values(categories).forEach(cat => groups[cat] = []);
+
+                commitsRaw.forEach(line => {
                     const [hash, ...parts] = line.split('|');
                     const msg = parts.join('|').trim();
                     
-                    // Regex ultra-flexível: aceita "tipo: mensagem" ou "tipo(escopo): mensagem"
+                    // Regex robusta para Conventional Commits
                     const match = msg.match(/^(\w+)(?:\((.*?)\))?(!?):(.*)/i);
-                    
                     if (match) {
                         const type = match[1].toLowerCase();
                         const scope = match[2];
+                        const isBreaking = match[3] === '!';
                         const subject = match[4].replace(/#\d+/g, '').trim();
                         const prMatch = msg.match(/#(\d+)/);
-                        const pr = prMatch ? ` ([#${prMatch[1]}](https://github.com/${process.env.REPO}/issues/${prMatch[1]}))` : '';
                         
-                        const entry = `* ${scope ? `**${scope}:** ` : ''}${subject}${pr} ([${hash.substring(0,7)}](https://github.com/${process.env.REPO}/commit/${hash}))`;
+                        const prLink = prMatch ? ` ([#${prMatch[1]}](https://github.com/${repo}/issues/${prMatch[1]}))` : '';
+                        const commitLink = ` ([${hash.substring(0, 7)}](https://github.com/${repo}/commit/${hash}))`;
                         
-                        const cat = categories[type] || 'Maintenance';
-                        if (groups[cat]) groups[cat].push(entry);
+                        let entry = `* ${scope ? `**${scope}:** ` : ''}${subject}${prLink}${commitLink}`;
+                        if (isBreaking) entry = `* **BREAKING CHANGE:** ${subject}${prLink}${commitLink}`;
+                        
+                        const categoryName = categories[type] || 'Maintenance';
+                        if (groups[categoryName]) groups[categoryName].push(entry);
                     }
                 });
+
+                // 2. Gera o bloco da nova versão
+                let newEntry = `## ${previousTag ? `[${version}](https://github.com/${repo}/compare/${previousTag}...${currentTag})` : version} (${date})`;
                 
-                let content = '';
-                ['Features', 'Bug Fixes', 'Performance Improvements', 'Documentation', 'Maintenance'].forEach(title => {
-                    if (groups[title].length > 0) content += `\n### ${title}\n\n${groups[title].join('\n')}\n`;
+                const displayOrder = ['Features', 'Bug Fixes', 'Performance Improvements', 'Code Refactoring', 'Documentation', 'Maintenance'];
+                let hasContent = false;
+                displayOrder.forEach(title => {
+                    if (groups[title] && groups[title].length > 0) {
+                        newEntry += `\n\n### ${title}\n\n${groups[title].join('\n')}`;
+                        hasContent = true;
+                    }
                 });
-                fs.writeFileSync('/tmp/changelog_entry.txt', content);
+
+                if (!hasContent) {
+                    console.log("Nenhum commit convencional encontrado. Abortando atualização.");
+                    process.exit(0);
+                }
+
+                // 3. Atualiza o arquivo CHANGELOG.md
+                const filePath = 'CHANGELOG.md';
+                const introText = "# Changelog\n\nAll notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.\n";
+                
+                let fullContent = '';
+                if (fs.existsSync(filePath)) {
+                    const currentContent = fs.readFileSync(filePath, 'utf8');
+                    // Se já existe, tenta inserir após a introdução ou no topo
+                    if (currentContent.includes('## ')) {
+                        const parts = currentContent.split(/(## .*)/);
+                        const header = parts[0].trim();
+                        const body = parts.slice(1).join('').trim();
+                        fullContent = `${header}\n\n${newEntry}\n\n${body}`;
+                    } else {
+                        fullContent = `${introText}\n${newEntry}\n\n${currentContent.replace('# Changelog', '').trim()}`;
+                    }
+                } else {
+                    fullContent = `${introText}\n${newEntry}\n`;
+                }
+
+                fs.writeFileSync(filePath, fullContent.trim() + '\n');
+                console.log("CHANGELOG.md atualizado com sucesso!");
                 EOF
-                
-                REPO="${{ github.repository }}" node /tmp/parse_commits.js
-
-            - name: Update CHANGELOG.md
-              run: |
-                CURRENT_TAG="${{ steps.previous_tag.outputs.current_tag }}"
-                PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
-                VERSION=$(echo "$CURRENT_TAG" | sed -E 's/.*\/v?|v//')
-                DATE=$(date +%Y-%m-%d)
-                REPO_URL="https://github.com/${{ github.repository }}"
-                
-                # Prepara o cabeçalho da nova versão
-                if [ -n "$PREVIOUS_TAG" ]; then
-                    HEADER="## [$VERSION]($REPO_URL/compare/$PREVIOUS_TAG...$CURRENT_TAG) ($DATE)"
-                else
-                    HEADER="## $VERSION ($DATE)"
-                fi
-
-                # Lógica de atualização segura sem usar SED
-                {
-                    echo "$HEADER"
-                    cat /tmp/changelog_entry.txt
-                    echo ""
-                } > /tmp/new_block.txt
-
-                if [ -f CHANGELOG.md ]; then
-                    # Divide o arquivo em dois na linha do "All notable changes" e insere o novo bloco no meio
-                    csplit CHANGELOG.md "/All notable changes/+1" --quiet --prefix="/tmp/changelog_part"
-                    cat /tmp/changelog_part00 /tmp/new_block.txt /tmp/changelog_part01 > CHANGELOG.md
-                else
-                    echo -e "# Changelog\n\nAll notable changes to this project will be documented in this file.\n" > CHANGELOG.md
-                    cat /tmp/new_block.txt >> CHANGELOG.md
-                fi
 
             - name: Commit Change
               uses: stefanzweifel/git-auto-commit-action@v5
