@@ -1,4 +1,6 @@
 # Changelog
+All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+
 
 ## [release/v1.0.7](https://github.com/alessandra1408/workflows-example/compare/release/v1.0.6...release/v1.0.7) (2025-12-19)
 
