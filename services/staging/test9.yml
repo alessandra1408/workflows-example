@@ -1,0 +1,27 @@
+_format_version: "3.0"
+_info:
+  defaults: {}
+  select_tags:
+    - test9
+
+services:
+  - name: test9
+    enabled: true
+    host: test9
+    port: 443
+    tls_verify: false
+    protocol: https
+    routes:
+      - name: test9-route
+        hosts:
+          - test.com
+        methods:
+          - GET
+          - POST
+        protocols:
+          - http
+        paths:
+          - /auth/teste
+        strip_path: false
+    tags:
+      - test9
