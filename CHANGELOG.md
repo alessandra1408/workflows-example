@@ -123,3 +123,13 @@
 
 * update changelog for release/v1.0.3 [skip ci] ([da3dc2a](https://github.com/alessandra1408/workflows-example/commit/da3dc2a))
 * update changelog for release/v1.0.2 [skip ci] ([fcf2647](https://github.com/alessandra1408/workflows-example/commit/fcf2647))
+
+## [1.0.4](https://github.com/alessandra1408/workflows-example/compare/release/v1.0.3...release/v1.0.4) (2025-12-19)
+
+### Features
+
+* adds new test8 file ([#197](https://github.com/alessandra1408/workflows-example/issues/197)) ([62ed928](https://github.com/alessandra1408/workflows-example/commit/62ed928))
+
+### Documentation
+
+* update changelog for release/v1.0.3 [skip ci] ([f5b2afa](https://github.com/alessandra1408/workflows-example/commit/f5b2afa))
