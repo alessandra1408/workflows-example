@@ -28,19 +28,16 @@ jobs:
             - name: Get previous release tag
               id: previous_tag
               run: |
-                # Garante que o ambiente tenha acesso a todas as tags
                 git fetch --tags --force
                 
-                # Identifica a tag atual (suporta manual ou release)
                 CURRENT_TAG="${{ github.event.release.tag_name }}"
                 if [ -z "$CURRENT_TAG" ]; then CURRENT_TAG="${{ github.ref_name }}"; fi
 
-                # Busca a tag cronologicamente anterior à atual
+                # Busca a tag anterior cronológica
                 PREVIOUS_TAG=$(git tag --sort=-creatordate | grep -vx "${CURRENT_TAG}" | head -n 1)
                 
                 echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
                 echo "current_tag=$CURRENT_TAG" >> $GITHUB_OUTPUT
-                echo "::notice ::Current: $CURRENT_TAG | Previous: $PREVIOUS_TAG"
 
             - name: Get commits between releases
               id: commits
@@ -49,33 +46,24 @@ jobs:
                 PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
                 
                 if [ -z "$PREVIOUS_TAG" ]; then
-                    # Se não houver anterior, pega os últimos 50 commits da tag atual
                     COMMITS=$(git log "$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges -n 50)
                 else
-                    # Compara a tag anterior com a atual
                     COMMITS=$(git log "$PREVIOUS_TAG..$CURRENT_TAG" --pretty=format:"%h|%s" --no-merges)
                 fi
-                
                 echo "$COMMITS" > /tmp/commits.txt
-                echo "--- LOG DE COMMITS ---"
-                cat /tmp/commits.txt
 
             - name: Update CHANGELOG.md
               run: |
-                # Passamos as variáveis necessárias para o Node
                 export CURRENT_TAG="${{ steps.previous_tag.outputs.current_tag }}"
                 export PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
                 export REPO="${{ github.repository }}"
                 
                 node << 'EOF'
                 const fs = require('fs');
-                const { execSync } = require('child_process');
-
-                const currentTag = process.env.CURRENT_TAG;
+                const currentTag = process.env.CURRENT_TAG; // Ex: release/v1.0.6
                 const previousTag = process.env.PREVIOUS_TAG;
                 const repo = process.env.REPO;
                 const date = new Date().toISOString().split('T')[0];
-                const version = currentTag.replace(/.*\/v?|v/, '');
 
                 // 1. Parse dos Commits
                 const commitsRaw = fs.readFileSync('/tmp/commits.txt', 'utf8').split('\n').filter(Boolean);
@@ -85,9 +73,7 @@ jobs:
                     perf: 'Performance Improvements',
                     revert: 'Reverts',
                     docs: 'Documentation',
-                    style: 'Styles',
                     refactor: 'Code Refactoring',
-                    test: 'Tests',
                     chore: 'Maintenance'
                 };
 
@@ -97,9 +83,8 @@ jobs:
                 commitsRaw.forEach(line => {
                     const [hash, ...parts] = line.split('|');
                     const msg = parts.join('|').trim();
-                    
-                    // Regex robusta para Conventional Commits
                     const match = msg.match(/^(\w+)(?:\((.*?)\))?(!?):(.*)/i);
+                    
                     if (match) {
                         const type = match[1].toLowerCase();
                         const scope = match[2];
@@ -118,8 +103,8 @@ jobs:
                     }
                 });
 
-                // 2. Gera o bloco da nova versão
-                let newEntry = `## ${previousTag ? `[${version}](https://github.com/${repo}/compare/${previousTag}...${currentTag})` : version} (${date})`;
+                // 2. Gera o bloco usando o nome EXATO da tag no título
+                let newEntry = `## ${previousTag ? `[${currentTag}](https://github.com/${repo}/compare/${previousTag}...${currentTag})` : currentTag} (${date})`;
                 
                 const displayOrder = ['Features', 'Bug Fixes', 'Performance Improvements', 'Code Refactoring', 'Documentation', 'Maintenance'];
                 let hasContent = false;
@@ -131,19 +116,19 @@ jobs:
                 });
 
                 if (!hasContent) {
-                    console.log("Nenhum commit convencional encontrado. Abortando atualização.");
+                    console.log("Nenhum commit convencional encontrado.");
                     process.exit(0);
                 }
 
-                // 3. Atualiza o arquivo CHANGELOG.md
+                // 3. Atualização do arquivo
                 const filePath = 'CHANGELOG.md';
                 const introText = "# Changelog\n\nAll notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.\n";
                 
                 let fullContent = '';
                 if (fs.existsSync(filePath)) {
                     const currentContent = fs.readFileSync(filePath, 'utf8');
-                    // Se já existe, tenta inserir após a introdução ou no topo
                     if (currentContent.includes('## ')) {
+                        // Divide o arquivo na primeira ocorrência de "## " para injetar o novo bloco
                         const parts = currentContent.split(/(## .*)/);
                         const header = parts[0].trim();
                         const body = parts.slice(1).join('').trim();
@@ -156,7 +141,6 @@ jobs:
                 }
 
                 fs.writeFileSync(filePath, fullContent.trim() + '\n');
-                console.log("CHANGELOG.md atualizado com sucesso!");
                 EOF
 
             - name: Commit Change
