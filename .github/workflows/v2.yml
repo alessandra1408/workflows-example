@@ -198,6 +198,7 @@ jobs:
             echo "COMMIT_HAS_CHANGES=false" >> $GITHUB_OUTPUT
             exit 0
           fi
+          
 
           echo "Arquivos a serem revertidos:"
           printf " - %s\n" "${files_to_revert[@]}"
