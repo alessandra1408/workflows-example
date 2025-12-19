@@ -116,3 +116,10 @@
 ## v1.0.0
 
 - Primeira versão...
+
+## [1.0.3](https://github.com/alessandra1408/workflows-example/compare/release/v1.0.2...release/v1.0.3) (2025-12-19)
+
+### Documentation
+
+* update changelog for release/v1.0.3 [skip ci] ([da3dc2a](https://github.com/alessandra1408/workflows-example/commit/da3dc2a))
+* update changelog for release/v1.0.2 [skip ci] ([fcf2647](https://github.com/alessandra1408/workflows-example/commit/fcf2647))
