@@ -29,7 +29,6 @@ jobs:
               id: previous_tag
               run: |
                 git fetch --tags --force
-                
                 CURRENT_TAG="${{ github.event.release.tag_name }}"
                 if [ -z "$CURRENT_TAG" ]; then CURRENT_TAG="${{ github.ref_name }}"; fi
 
@@ -60,12 +59,14 @@ jobs:
                 
                 node << 'EOF'
                 const fs = require('fs');
-                const currentTag = process.env.CURRENT_TAG; // Ex: release/v1.0.6
+                const currentTag = process.env.CURRENT_TAG; 
                 const previousTag = process.env.PREVIOUS_TAG;
                 const repo = process.env.REPO;
                 const date = new Date().toISOString().split('T')[0];
 
-                // 1. Parse dos Commits
+                const introText = `# Changelog\n\nAll notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.`;
+
+                // 1. Parse dos Commits (Aplicado a todas as categorias)
                 const commitsRaw = fs.readFileSync('/tmp/commits.txt', 'utf8').split('\n').filter(Boolean);
                 const categories = {
                     feat: 'Features',
@@ -95,6 +96,7 @@ jobs:
                         const prLink = prMatch ? ` ([#${prMatch[1]}](https://github.com/${repo}/issues/${prMatch[1]}))` : '';
                         const commitLink = ` ([${hash.substring(0, 7)}](https://github.com/${repo}/commit/${hash}))`;
                         
+                        // Formatação padrão para QUALQUER entrada
                         let entry = `* ${scope ? `**${scope}:** ` : ''}${subject}${prLink}${commitLink}`;
                         if (isBreaking) entry = `* **BREAKING CHANGE:** ${subject}${prLink}${commitLink}`;
                         
@@ -103,7 +105,7 @@ jobs:
                     }
                 });
 
-                // 2. Gera o bloco usando o nome EXATO da tag no título
+                // 2. Gera o bloco da nova versão (mantendo nome exato da tag)
                 let newEntry = `## ${previousTag ? `[${currentTag}](https://github.com/${repo}/compare/${previousTag}...${currentTag})` : currentTag} (${date})`;
                 
                 const displayOrder = ['Features', 'Bug Fixes', 'Performance Improvements', 'Code Refactoring', 'Documentation', 'Maintenance'];
@@ -120,27 +122,23 @@ jobs:
                     process.exit(0);
                 }
 
-                // 3. Atualização do arquivo
+                // 3. Atualização Inteligente do Arquivo
                 const filePath = 'CHANGELOG.md';
-                const introText = "# Changelog\n\nAll notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.\n";
-                
-                let fullContent = '';
+                let historicalContent = '';
+
                 if (fs.existsSync(filePath)) {
-                    const currentContent = fs.readFileSync(filePath, 'utf8');
-                    if (currentContent.includes('## ')) {
-                        // Divide o arquivo na primeira ocorrência de "## " para injetar o novo bloco
-                        const parts = currentContent.split(/(## .*)/);
-                        const header = parts[0].trim();
-                        const body = parts.slice(1).join('').trim();
-                        fullContent = `${header}\n\n${newEntry}\n\n${body}`;
-                    } else {
-                        fullContent = `${introText}\n${newEntry}\n\n${currentContent.replace('# Changelog', '').trim()}`;
+                    const content = fs.readFileSync(filePath, 'utf8');
+                    // Busca a posição da primeira versão (## ) para preservar o histórico abaixo dela
+                    const firstVersionIndex = content.indexOf('## ');
+                    if (firstVersionIndex !== -1) {
+                        historicalContent = content.substring(firstVersionIndex).trim();
                     }
-                } else {
-                    fullContent = `${introText}\n${newEntry}\n`;
                 }
 
-                fs.writeFileSync(filePath, fullContent.trim() + '\n');
+                // Monta o arquivo final: Cabeçalho Fixo + Nova Versão + Histórico Antigo
+                const finalFile = `${introText}\n\n${newEntry}\n\n${historicalContent}`.trim();
+
+                fs.writeFileSync(filePath, finalFile + '\n');
                 EOF
 
             - name: Commit Change
