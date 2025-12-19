@@ -1,0 +1,26 @@
+_format_version: "3.0"
+_info:
+  defaults: {}
+  select_tags:
+    - test6
+
+services:
+  - name: test6
+    enabled: true
+    host: test6
+    port: 443
+    tls_verify: false
+    protocol: https
+    routes:
+      - name: test6-route
+        hosts:
+          - test.com
+        methods:
+          - GET
+        protocols:
+          - http
+        paths:
+          - /auth/teste
+        strip_path: false
+    tags:
+      - test6
