@@ -2,26 +2,25 @@ _format_version: "3.0"
 _info:
   defaults: {}
   select_tags:
-    - test6
+    - test7
 
 services:
-  - name: test6
+  - name: test7
     enabled: true
-    host: test6
+    host: test7
     port: 443
     tls_verify: false
     protocol: https
     routes:
-      - name: test6-route
+      - name: test7-route
         hosts:
           - test.com
         methods:
           - GET
-          - POST
         protocols:
           - http
         paths:
           - /auth/teste
         strip_path: false
     tags:
-      - test6
+      - test7
