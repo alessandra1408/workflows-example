@@ -90,20 +90,28 @@ jobs:
                         const type = match[1].toLowerCase();
                         const scope = match[2];
                         const isBreaking = match[3] === '!';
-                        const subject = match[4].replace(/#\d+/g, '').trim();
+
+                        let subject = match[4]
+                        .replace(/#\d+/g, '')
+                        .replace(/\(\s*\)/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+
                         const prMatch = msg.match(/#(\d+)/);
                         
                         const prLink = prMatch ? ` ([#${prMatch[1]}](https://github.com/${repo}/issues/${prMatch[1]}))` : '';
                         const commitLink = ` ([${hash.substring(0, 7)}](https://github.com/${repo}/commit/${hash}))`;
                         
-                        // Formatação padrão para QUALQUER entrada
                         let entry = `* ${scope ? `**${scope}:** ` : ''}${subject}${prLink}${commitLink}`;
-                        if (isBreaking) entry = `* **BREAKING CHANGE:** ${subject}${prLink}${commitLink}`;
                         
+                        if (isBreaking) {
+                        entry = `* **BREAKING CHANGE:** ${scope ? `**${scope}:** ` : ''}${subject}${prLink}${commitLink}`;
+                        }
+            
                         const categoryName = categories[type] || 'Maintenance';
                         if (groups[categoryName]) groups[categoryName].push(entry);
-                    }
-                });
+                        }
+                    });
 
                 // 2. Gera o bloco da nova versão (mantendo nome exato da tag)
                 let newEntry = `## ${previousTag ? `[${currentTag}](https://github.com/${repo}/compare/${previousTag}...${currentTag})` : currentTag} (${date})`;
